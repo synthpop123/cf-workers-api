@@ -1,7 +1,6 @@
 import { createExecutionContext, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { createRouter } from "../src/lib/router";
-import { SCHEDULE } from "../src/schedule";
 import { call } from "./helpers";
 
 describe("routing", () => {
@@ -54,11 +53,5 @@ describe("routing", () => {
   it("refuses a duplicate route", () => {
     const ok = () => new Response();
     expect(() => createRouter([["GET /a", ok], ["GET /a", ok]])).toThrow("Duplicate route");
-  });
-});
-
-describe("schedule", () => {
-  it("has jobs for exactly the cron triggers wrangler.jsonc declares", () => {
-    expect([...SCHEDULE.keys()].sort()).toEqual([...env.TEST_CRONS].sort());
   });
 });

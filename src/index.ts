@@ -44,6 +44,6 @@ const router = createRouter([
 export default {
   fetch: router,
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(runScheduled(controller.cron, env));
+    ctx.waitUntil(runScheduled(controller.cron, new Date(controller.scheduledTime), env));
   },
 } satisfies ExportedHandler<Env>;
