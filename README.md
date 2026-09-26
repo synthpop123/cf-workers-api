@@ -42,7 +42,7 @@ flowchart LR
 | [`switch`](src/services/switch) | Nintendo Parental Controls (znma) API; eShop for prices and names | D1 `switch-play`, R2 `imagebed` | daily sync, 09:00 Asia/Shanghai |
 | [`flights`](src/services/flights) | self-hosted [AirTrail](https://github.com/johanohly/AirTrail) | — | daily, at local midnight |
 | [`music`](src/services/music) | self-hosted [Koito](https://github.com/gabehf/Koito) | — | every 5 minutes |
-| [`movies`](src/services/movies) | Letterboxd RSS | R2 `imagebed` (posters) | every 30 minutes |
+| [`movies`](src/services/movies) | Letterboxd RSS | R2 `imagebed` (posters) | every 3 hours |
 
 - **tokens** implements the official server's submission contract and merge semantics for the `tokens` CLI — per-device, per-day, per-client replace with a regression guard, parser-revision floors, authoritative coverage windows, the official consistency checks — and keeps the full usage matrix (device × date × client × model × provider, every token category, messages, cost). Its view is the dashboard at [lkwplus.com/tokens](https://lkwplus.com/tokens), including subscription quota cards reported by a collector that keeps the vendor credentials on its own machine.
 - **switch** syncs daily play time from Nintendo's Parental Controls API, looks each title up once on the eShop (HK for the price, US for a consistent name) and mirrors cover art into R2.
@@ -100,7 +100,7 @@ The account-wide cron allowance is small (five triggers on the free plan), so th
 
 | Trigger | Jobs |
 |---|---|
-| `*/5 * * * *` | music every 5 min · movies every 30 min · flights daily at 00:00 local |
+| `*/5 * * * *` | music every 5 min · movies every 3 h · flights daily at 00:00 local |
 | `0 1 * * *` | the Switch sync |
 
 Each trigger is its own invocation with its own CPU and subrequest budget, which is why the Switch sync — the one heavy job — has a trigger to itself. A test checks that the triggers match `wrangler.jsonc` and that every cadence lands on a tick.

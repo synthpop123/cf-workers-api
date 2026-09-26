@@ -8,7 +8,9 @@
  *   `*\/5 * * * *`  the heartbeat, for the snapshots that poll an upstream
  *                   music     every 5 min — the page marks a listen under
  *                             ten minutes old as playing
- *                   movies    every 30 min
+ *                   movies    every 3 hours — each run is one RSS fetch,
+ *                             kept rare so Letterboxd has no reason to
+ *                             rate-limit it
  *                   flights   daily at 00:00 — the map changes when a
  *                             flight is logged, and `upcoming` flips at
  *                             midnight
@@ -54,7 +56,7 @@ export const TRIGGERS = new Map<string, Job[]>([
     "*/5 * * * *",
     [
       refreshing(music.site, { every: 5 }),
-      refreshing(movies.site, { every: 30 }),
+      refreshing(movies.site, { every: 180 }),
       refreshing(flights.site, { at: "00:00" }),
     ],
   ],
