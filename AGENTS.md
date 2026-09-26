@@ -222,9 +222,9 @@ production.
   `PCTL_SESSION_TOKEN` is scoped to the Parental Controls app and cannot be
   reused from the NSO app. There is **no request signing** (no f-token,
   imink or nxapi in the request path; nxapi is used once, by hand, to get
-  the token). App version/build are pinned in `services/switch/moon/config.ts`; bump
-  when Nintendo returns `update_required`. The full data-source story is on
-  the old switch-worker service page — don't restate it here.
+  the token). App version/build are pinned in
+  `services/switch/moon/config.ts`; bump them when Nintendo returns
+  `update_required`.
 - Don't go looking for more routes: the API answers for exactly
   `fetchUser`, `fetchOwnedDevices`, `fetchDailySummaries`,
   `fetchParentalControlSetting`. There is **no monthly-summary route**
