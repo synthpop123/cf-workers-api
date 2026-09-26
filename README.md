@@ -113,40 +113,14 @@ Third-party artwork (Switch covers, Letterboxd posters) is copied into a public 
 
 Every public body is built field by field from a hand-narrowed slice of its upstream. Internal device ids, account identities, PNRs, seat numbers, serial numbers and unlock codes are dropped at that step, and tests pin it. An upstream field rename fails a composition (the last good snapshot keeps serving) instead of silently changing a public contract.
 
-## Deploy your own
+## Deployment
 
-You need a Cloudflare account and Node 22+. The free plan is enough.
+Pushing to `main` is the deploy: Cloudflare [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) runs `npm run check` and deploys only if it passes. Two things are not part of it:
 
-1. **Clone and install.**
-   ```sh
-   git clone https://github.com/synthpop123/cf-workers-api && cd cf-workers-api
-   npm install
-   ```
-2. **Create the resources** and put their ids into [`wrangler.jsonc`](wrangler.jsonc):
-   ```sh
-   npx wrangler kv namespace create cache
-   npx wrangler d1 create tokens-usage
-   npx wrangler d1 create switch-play
-   npx wrangler r2 bucket create tokens-archive
-   npx wrangler r2 bucket create imagebed      # give it a public custom domain
-   ```
-3. **Configure.** In `wrangler.jsonc`, set `name`, the custom domain under `routes`, and the `vars`: `IMAGE_BASE_URL` (the image bucket's public URL), `AIRTRAIL_URL`, `KOITO_URL`, `LETTERBOXD_USER`, `TOKENS_USERNAME`. Calendar days are bucketed in `TIME_ZONE` ([`src/lib/http.ts`](src/lib/http.ts)); change it if you are not in UTC+8, along with the Switch trigger time.
-4. **Apply migrations.**
-   ```sh
-   npx wrangler d1 migrations apply tokens-usage --remote
-   npx wrangler d1 migrations apply switch-play --remote
-   ```
-5. **Set secrets** (see [`.dev.vars.example`](.dev.vars.example)):
-   ```sh
-   npx wrangler secret put TOKENS_API_TOKEN      # any long random string
-   npx wrangler secret put SWITCH_API_TOKEN      # any long random string
-   npx wrangler secret put PCTL_SESSION_TOKEN    # Nintendo Parental Controls session token
-   npx wrangler secret put AIRTRAIL_API_KEY      # from AirTrail's settings
-   ```
-6. **Deploy.** `npx wrangler deploy`, or connect the repository to [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) with `npm run check` as the build command.
-7. **Point reporters at it** — see [docs/tokens-reporters.md](docs/tokens-reporters.md).
+- **Migrations** — after adding one, `npx wrangler d1 migrations apply <tokens-usage|switch-play> --remote`. They are append-only; D1 tracks them by filename.
+- **Secrets** — `TOKENS_API_TOKEN`, `SWITCH_API_TOKEN`, `PCTL_SESSION_TOKEN` and `AIRTRAIL_API_KEY` live on the Worker (`npx wrangler secret put <NAME>`), declared under `secrets.required` in [`wrangler.jsonc`](wrangler.jsonc) so they are typed on `Env`.
 
-Don't need a service? Delete its directory, its line in `src/services/index.ts`, its jobs in `src/schedule.ts`, and the bindings, vars and secrets only it used.
+Reporters for the tokens service are set up per machine: [docs/tokens-reporters.md](docs/tokens-reporters.md).
 
 ## Development
 

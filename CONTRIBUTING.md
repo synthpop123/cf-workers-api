@@ -1,8 +1,7 @@
 # Contributing
 
-Thanks for taking a look. This is a personal API, but issues and pull
-requests are welcome — especially bug fixes and anything that makes a
-service easier to reuse.
+Thanks for taking a look. This is a personal API wired to one person's
+accounts and self-hosted apps, but bug reports and fixes are welcome.
 
 ## Workflow
 
