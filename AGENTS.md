@@ -16,6 +16,10 @@ The build command lives in the Cloudflare dashboard (Workers →
 `cf-workers-api` → Settings → Build), not in the repo; the wrangler OAuth
 token has no Workers Builds scope, so it cannot be changed from here.
 
+Commits follow Conventional Commits (`type(scope): summary`, scope = a
+service or a shared part; see CONTRIBUTING.md), with the *why* in the
+body.
+
 D1 migrations are **not** applied by the deploy:
 `npx wrangler d1 migrations apply <tokens-usage|switch-play> --remote`
 after adding one. Migrations are append-only — D1 records applied ones by
@@ -25,11 +29,16 @@ production.
 
 ## Shape of the Worker
 
-- One Worker, five services (`src/services/<name>/`), each exporting its
-  `Route`s under its own path prefix; `src/index.ts` joins them into one
-  table (`lib/router.ts`), which owns OPTIONS, 404/405, the JSON 500 and
-  the CORS header set on every response. A new service is a directory
-  plus one line in `index.ts` — and in `schedule.ts` if it polls.
+- One Worker, five services. Each `src/services/<name>/` default-exports
+  a `Service` (`lib/service.ts`): its name — also its path prefix and KV
+  namespace — its snapshot, and any other routes. `src/services/index.ts`
+  is the registry; `src/index.ts` derives `GET /<name>/site` for each and
+  joins everything into one table (`lib/router.ts`), which owns OPTIONS,
+  HEAD for GET routes, 404/405, the JSON 500, and the CORS set and
+  `nosniff` on every response. A new service is a directory plus a line in
+  the registry — and a job in `schedule.ts` if it polls.
+  `test/services.spec.ts` holds every route and key under the service's
+  own name.
 - Every public view is a **snapshot** (`lib/snapshot.ts`): a
   `{ key, version, compose(env, today) }` whose body is stored in KV
   (`CACHE`, key `<service>:site`) with version/day/etag/changedAt in the
@@ -46,13 +55,18 @@ production.
   spend them rewriting identical payloads. Keep it that way.
 - `/misc` concatenates stored snapshot texts; it never parses them. A
   service added to lkwplus.com/misc goes into `SECTIONS` in `src/misc.ts`.
-- The scheduler: `SCHEDULE` in `src/schedule.ts` keys jobs by cron
-  expression, and the keys must equal `triggers.crons` in `wrangler.jsonc`
-  (`test/router.spec.ts` checks). One invocation per expression means one
-  CPU/subrequest budget per expression (50 external subrequests on the
-  free plan) — a heavy job gets a trigger to itself, as the Switch sync
-  does. The account's cron-trigger quota is small (5 on free); adding an
-  expression may need one freed elsewhere.
+- The scheduler: `TRIGGERS` in `src/schedule.ts` keys jobs by cron
+  expression (keys must equal `triggers.crons` in `wrangler.jsonc`), and
+  each job declares a `cadence` inside its trigger — `{ every: minutes }`
+  counted from local midnight, or `{ at: "HH:MM" }` daily, both in
+  TIME_ZONE (`test/schedule.spec.ts` checks the keys and that every
+  cadence lands on a tick). Prefer a cadence to a new trigger: the account
+  has **five cron triggers in total** on the free plan, shared with other
+  Workers (pb, sink and sub-store hold three), and a deploy that exceeds
+  it fails at the trigger step *after* the code has gone live — the
+  Worker then runs with no schedule at all. One invocation per trigger
+  means one CPU/subrequest budget per trigger (50 external subrequests
+  on free), which is why the Switch sync has a trigger to itself.
 - Third-party artwork goes through `lib/images.ts` into the shared
   `imagebed` bucket under the service's prefix, content-addressed so it is
   copied once. A failed mirror omits the image; it never fails a
@@ -60,10 +74,11 @@ production.
 
 ## Rules that hold everywhere
 
-- Verify with `npm run check` (wrangler types + `tsc -p test` over src and
-  tests + `vitest run` inside workerd via `@cloudflare/vitest-pool-workers`,
-  against real miniflare-backed D1/KV/R2). GitHub Actions runs the same
-  gate. The compatibility date cannot be newer than the workerd bundled
+- Verify with `npm run check` (wrangler types + Biome format check +
+  `tsc -p test` over src and tests + `vitest run` inside workerd via
+  `@cloudflare/vitest-pool-workers`, against real miniflare-backed
+  D1/KV/R2). GitHub Actions runs the same gate. `npm run format` fixes
+  formatting (Biome, format-only). The compatibility date cannot be newer than the workerd bundled
   with the test pool supports — bump the pool first.
 - Bindings, vars **and secrets** come from `wrangler.jsonc` through
   `wrangler types` (secrets via `secrets.required`), so `Env` is
@@ -138,7 +153,7 @@ production.
   and recomposes in one call: KV is eventually consistent, so never
   write a plan and then read it back to compose the payload. `wipeQuota`
   is the full-wipe path.
-- On that host (per-host install and supervision: `docs/tokens-hosts.md`) the
+- On that host (install and supervision: `docs/tokens-reporters.md`) the
   `agent` user runs **three** units, not two: the two quota timers
   above, plus a long-lived `tokens-serve.service` that submits this
   device's usage every 30 minutes. So after replacing

@@ -660,9 +660,9 @@
       <tbody>
         <tr><td><code>/tokens</code></td><td><code>tokens</code> CLI on each machine, quota collectors</td><td>D1 <code>tokens-usage</code> · R2 <code>tokens-archive</code></td><td>every submission and report</td></tr>
         <tr><td><code>/switch</code></td><td>Nintendo Parental Controls API, eShop</td><td>D1 <code>switch-play</code> · R2 <code>imagebed</code></td><td>daily sync, 01:00 UTC</td></tr>
-        <tr><td><code>/flights</code></td><td>self-hosted AirTrail</td><td>snapshot only</td><td>heartbeat, every 5 min</td></tr>
-        <tr><td><code>/music</code></td><td>self-hosted Koito</td><td>snapshot only</td><td>heartbeat, every 5 min</td></tr>
-        <tr><td><code>/movies</code></td><td>Letterboxd RSS</td><td>R2 <code>imagebed</code> (posters)</td><td>heartbeat, every 5 min</td></tr>
+        <tr><td><code>/flights</code></td><td>self-hosted AirTrail</td><td>snapshot only</td><td>daily, at local midnight</td></tr>
+        <tr><td><code>/music</code></td><td>self-hosted Koito</td><td>snapshot only</td><td>every 5 min</td></tr>
+        <tr><td><code>/movies</code></td><td>Letterboxd RSS</td><td>R2 <code>imagebed</code> (posters)</td><td>every 30 min</td></tr>
       </tbody>
     </table>
   </section>
@@ -696,9 +696,11 @@
         <span class="node" data-store>R2 · artwork</span>
       </p>
       <p class="cap">
-        A five-minute heartbeat recomposes the snapshots that read an upstream; a composition whose
-        bytes did not move writes nothing. The Switch sync runs on its own daily trigger, with its
-        own CPU and subrequest budget. Third-party artwork is copied into R2 once, keyed by content.
+        A five-minute heartbeat recomposes the snapshots that read an upstream, each on its own
+        cadence — music every 5 minutes, movies every 30, flights once a day at midnight — and a
+        composition whose bytes did not move writes nothing. The Switch sync runs on its own daily
+        trigger, with its own CPU and subrequest budget. Third-party artwork is copied into R2 once,
+        keyed by content.
       </p>
     </div>
 
@@ -711,7 +713,8 @@
         <span class="node">lkwplus.com</span>
       </p>
       <p class="cap">
-        No auth on reads, open to any origin with one static CORS header set. Browsers get
+        No auth on reads, open to any origin with one static CORS header set; <code>HEAD</code>
+        works wherever <code>GET</code> does. Browsers get
         <code>Cache-Control: no-cache</code> and a strong ETag, so every load asks and an unchanged
         view costs a ~0-byte <code>304</code>.
       </p>

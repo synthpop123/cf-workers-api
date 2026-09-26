@@ -1,0 +1,11 @@
+# Local secrets for `npm run dev`. Copy to .dev.vars (gitignored) and fill in.
+# In production each is a Worker secret: npx wrangler secret put <NAME>
+
+# Bearer token for the tokens CLI and the quota collectors.
+TOKENS_API_TOKEN=
+# Bearer token for POST /switch/sync.
+SWITCH_API_TOKEN=
+# Nintendo Account session token scoped to the Parental Controls app.
+PCTL_SESSION_TOKEN=
+# AirTrail API key.
+AIRTRAIL_API_KEY=

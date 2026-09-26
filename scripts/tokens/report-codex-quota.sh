@@ -7,7 +7,7 @@
 # credential stays on this machine and the Worker only ever sees
 # percentages and timestamps — see src/services/tokens/quota.ts for what it keeps.
 #
-# Runs on one host (OracleARM, which already runs `tokens serve`) under
+# Runs on one host (the one that already runs `tokens serve`) under
 # the systemd user timer beside this file. Quota is account-wide, so a
 # second reporter would add nothing but a race. The Claude leg is its own
 # script and its own timer, reporting to its own key — see

@@ -1,0 +1,15 @@
+[Unit]
+Description=report this machine's AI token usage to the tokens service
+Documentation=https://github.com/synthpop123/cf-workers-api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/tokens serve
+Restart=on-failure
+RestartSec=60
+Environment=TOKENS_API_URL=https://api.lkwplus.com/tokens
+Environment=TOKENS_SUBMIT_INTERVAL=30
+
+[Install]
+WantedBy=default.target

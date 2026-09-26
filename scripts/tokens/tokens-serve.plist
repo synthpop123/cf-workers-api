@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for `tokens serve` on macOS. Copy to
+  ~/Library/LaunchAgents/tokens-serve.plist, set the binary path, then:
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/tokens-serve.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>tokens-serve</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Homebrew's version-independent symlink: an upgrade needs no edit. -->
+    <string>/opt/homebrew/opt/tokens/bin/tokens</string>
+    <string>serve</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TOKENS_API_URL</key>
+    <string>https://api.lkwplus.com/tokens</string>
+    <key>TOKENS_SUBMIT_INTERVAL</key>
+    <string>30</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/tokens-serve.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/tokens-serve.log</string>
+</dict>
+</plist>
