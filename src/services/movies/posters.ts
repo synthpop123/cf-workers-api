@@ -5,9 +5,13 @@
  *
  * Letterboxd serves any poster at a set of fixed crops named in the URL
  * (`…-0-600-0-900-crop.jpg?v=<hash>`); the mirror stores the 460×690 crop,
- * twice the ~230px a card is ever drawn at. The key is the poster's slug
- * plus its `v` hash, which changes when the artwork does — so a poster is
- * copied once, and a replaced one lands under a new key.
+ * twice the ~230px a card is ever drawn at. Both kinds of poster take the
+ * same crops: a film's own (`/resized/film-poster/1/2/…/<id>-<slug>-…`) and
+ * one a member picked for their diary (`/resized/sm/upload/…/<hash>-…`).
+ *
+ * The key is the file's last path segment plus its `v` hash, which changes
+ * when the artwork does — so a poster is copied once, and a replaced one
+ * lands under a new key.
  */
 
 import type { Env } from "../../env";
@@ -15,7 +19,7 @@ import { mirrorImage, publicUrl } from "../../lib/images";
 
 const CROP = "-0-460-0-690-crop";
 const POSTER_RE =
-  /^https:\/\/a\.ltrbxd\.com\/resized\/film-poster\/(?:\d+\/)+([a-z0-9-]+?)-0-\d+-0-\d+-crop\.jpg(?:\?v=([0-9a-f]+))?$/;
+  /^https:\/\/a\.ltrbxd\.com\/resized\/(?:[\w-]+\/)+([\w-]+?)-0-\d+-0-\d+-crop\.jpg(?:\?v=([0-9a-f]+))?$/;
 
 /** The crop to copy and the key to store it under, or null for a URL
  *  that isn't a Letterboxd film poster. */

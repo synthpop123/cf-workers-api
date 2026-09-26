@@ -63,7 +63,16 @@ describe("composition", () => {
       source: POSTER.replace("-0-600-0-900-crop", "-0-460-0-690-crop"),
       key: "movies/posters/197012-the-hateful-eight-0428be5b84.jpg",
     });
+    // A poster the member picked for their diary lives under another path
+    // and takes the same crops.
+    const custom =
+      "https://a.ltrbxd.com/resized/sm/upload/sw/w2/ep/v4/9O50TVszkz0dcP5g6Ej33UhR7vw-0-600-0-900-crop.jpg?v=5a65f5202f";
+    expect(posterSource(custom)).toEqual({
+      source: custom.replace("-0-600-0-900-crop", "-0-460-0-690-crop"),
+      key: "movies/posters/9O50TVszkz0dcP5g6Ej33UhR7vw-5a65f5202f.jpg",
+    });
     expect(posterSource("https://s.ltrbxd.com/static/img/empty-poster-230.png")).toBeNull();
+    expect(posterSource("https://evil.example/resized/x-0-600-0-900-crop.jpg")).toBeNull();
   });
 });
 
