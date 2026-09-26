@@ -1,0 +1,516 @@
+/**
+ * GET /tokens/site — the one-request view backing lkwplus.com/tokens.
+ *
+ * Everything the dashboard needs, precomposed: totals and per-dimension
+ * breakdowns for the four ranges it offers (7 / 30 / 90 days / all time,
+ * with the range boundaries computed here so client and server always
+ * agree on the calendar), the full daily series sliced by provider and
+ * by client — each client carrying the models behind it, so any single
+ * day can be opened up the way a range can — with per-day active time
+ * where the CLI reported it, and the device inventory with its CLI
+ * metadata. Every breakdown row also carries its usage span — distinct
+ * active days plus first/last date in range — and each client and
+ * provider row carries the models behind it, the cell-level slice of
+ * the matrix the marginals cannot reconstruct.
+ *
+ * There is deliberately no single-day range: the dashboard's day panel
+ * reads the daily series, which now carries the same client × model
+ * join, so today and any day the visitor clicks are one code path.
+ *
+ * Model and provider ids are canonicalized (see models.ts) *before* any
+ * aggregation, so the daily provider slices agree with the provider
+ * breakdown. Active days count messages too: early-2025 Cursor logs carry
+ * message counts but no token usage, and those days really were active.
+ *
+ * Composition is one D1 batch of three statements bounded as of today
+ * (composeSiteBody), aggregated into all five ranges in JS; the result
+ * is served as a KV snapshot (lib/snapshot.ts), rewritten by every
+ * accepted submission and quota report.
+ *
+ * One field does not come from D1 at all: `quota`, the subscription
+ * plan's rate-limit snapshot, is *reported* by a collector (quota.ts)
+ * and carried through from its own KV key. Everything else in the body
+ * is derived from the usage matrix and can be recomputed from it; this
+ * one cannot, which is why it is stored rather than aggregated — and
+ * why it ships with the `capturedAt` that dates it.
+ */
+
+import type { Env } from "../../env";
+import { isoToday } from "../../lib/http";
+import { store, type Snapshot } from "../../lib/snapshot";
+import {
+  METRICS_SQL,
+  TOKENS_SQL,
+  addMetrics,
+  byTokensDesc,
+  emptyMetrics,
+  type Metrics,
+} from "./metrics";
+import { canonicalModel, canonicalProvider } from "./models";
+import { QUOTA_PROVIDERS, type QuotaPlan } from "./quota-registry";
+
+// The schema version rides in the response body (`schemaVersion`, which
+// the homepage validates and keys its cache by) and in the snapshot
+// metadata, so a fresh deploy recomposes on first read instead of serving
+// the previous schema until the next submission. Bump SITE_VERSION on any
+// shape or semantics change, in lockstep with the homepage's
+// SITE_SCHEMA_VERSION and its committed fixture (homepage:
+// src/lib/client/tokens/schema.ts + contract.test.ts).
+export const SITE_VERSION = 15;
+/** Per-PoP staleness cap on the quota reads (30 s is the API minimum). */
+const KV_CACHE_TTL = 30;
+/** How recently a device must have reported to count as online: the
+ *  CLI's 30-minute cadence plus slack for a late run and KV propagation.
+ *  Shipped in the payload rather than hard-coded by each reader, and as
+ *  a duration rather than a verdict: the readers compare `lastSeen` to
+ *  their own clock, so a cached payload keeps aging correctly. */
+export const DEVICE_ONLINE_WITHIN_MS = 45 * 60_000;
+
+/**
+ * Subscription quota is *reported*, not derived: no D1 table backs it,
+ * because a percentage a collector can re-fetch in a second is not
+ * history worth storing — one key per plan, overwritten in place,
+ * constant in size forever. That is the same bound every other leg of
+ * the fan-out carries, reached by never accumulating in the first place.
+ *
+ * **One key per provider, not one key for all of them.** Each plan is
+ * read from a different vendor through a different credential, so they
+ * fail independently: Codex goes through the tokens CLI, Claude through
+ * an OAuth token this Worker never sees. A single overwritten snapshot
+ * would make them a package deal — an expired Claude credential would
+ * take the Codex card down with it on the next report, and a collector
+ * would have to succeed at everything to say anything. Separate keys
+ * mean a broken leg goes stale alone, visibly, which is what
+ * `capturedAt` is for.
+ */
+export const quotaKey = (provider: string) => `tokens:quota:${provider}`;
+
+const RANGES = [
+  { key: "week", days: 7 },
+  { key: "month", days: 30 },
+  { key: "quarter", days: 90 },
+  { key: "all", days: null },
+] as const;
+
+interface UsageRow extends Metrics {
+  date: string;
+  client: string;
+  model: string;
+  provider: string;
+}
+
+interface DailyActivityRow {
+  date: string;
+  active: number | null;
+}
+
+interface DeviceRow {
+  name: string | null;
+  firstSeen: number | null;
+  lastSeen: number | null;
+  cliVersion: string | null;
+  sessions: number | null;
+  activeMs: number | null;
+  longestMs: number | null;
+  maxConcurrent: number | null;
+  mcpServers: string | null;
+  activeDays: number;
+  tokens: number | null;
+  messages: number | null;
+  cost: number | null;
+}
+
+interface DaySlice {
+  tokens: number;
+  cost: number;
+}
+
+/** A client's day, plus the models it drove — the cell-level join that
+ *  lets the dashboard open any single day, not just today. Keyed by
+ *  *canonical* model id, so the cells agree with byModel. */
+interface DayClient extends DaySlice {
+  models: Record<string, DaySlice>;
+}
+
+/**
+ * Prototype-free, because the slice maps are keyed by ids that came
+ * straight from a CLI payload: on a plain object an id spelled
+ * `constructor` or `__proto__` resolves an inherited value instead of a
+ * fresh slot, and the slice then vanishes from the JSON while the day
+ * total still counts it — silent under-reporting, at HTTP 200. A Map
+ * would be safe too, but these serialize straight into the response.
+ */
+const emptySlices = <T>(): Record<string, T> => Object.create(null);
+
+interface SiteDay {
+  date: string;
+  tokens: number;
+  cost: number;
+  messages: number;
+  /** Per-day active time (ms) summed across devices; present only where
+   *  the CLI reported it. */
+  active?: number;
+  providers: Record<string, DaySlice>;
+  clients: Record<string, DayClient>;
+}
+
+/** Shift an ISO day by whole days; anchoring at noon UTC is DST-proof. */
+function shiftDays(day: string, delta: number): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
+/** A breakdown entry accumulates its distinct active dates, serialized as
+ *  a span (days + first/last) once the range is complete. */
+type Entry<T> = Metrics & T & { dates: Set<string> };
+
+/** Fold one usage row into the entry for `key`, creating it on first sight. */
+function fold<T>(map: Map<string, Entry<T>>, key: string, row: UsageRow, id: () => T): Entry<T> {
+  let entry = map.get(key);
+  if (!entry) {
+    entry = { ...emptyMetrics(), ...id(), dates: new Set() } as Entry<T>;
+    map.set(key, entry);
+  }
+  addMetrics(entry, row);
+  entry.dates.add(row.date);
+  return entry;
+}
+
+/** Sort by tokens, then trade the date set for its serialized span. */
+function serializeEntries<T>(map: Map<string, Entry<T>>) {
+  return [...map.values()].sort(byTokensDesc).map(({ dates, ...rest }) => {
+    const sorted = [...dates].sort();
+    return {
+      ...rest,
+      days: sorted.length,
+      firstDate: sorted[0] ?? null,
+      lastDate: sorted[sorted.length - 1] ?? null,
+    };
+  });
+}
+
+/**
+ * One cell of the client × model and provider × model matrices, inside
+ * one range. Each breakdown is a marginal of the same matrix, and a
+ * marginal cannot be un-summed: no amount of `byClient` and `byModel`
+ * tells you that the Claude Code rows include a non-Anthropic model, and
+ * no amount of `byProvider` and `byModel` tells you which of a vendor's
+ * models the bill went to. This is the cell-level join, carried without
+ * the metric split or usage span the top-level rows get — the disclosure
+ * shows a share, not a second full breakdown.
+ */
+interface ModelCell {
+  model: string;
+  tokens: number;
+  cost: number;
+  messages: number;
+}
+
+type ModelCells = Map<string, ModelCell>;
+
+/** Fold one usage row into the model cell of a breakdown entry. */
+function addCell(cells: ModelCells, model: string, row: UsageRow): void {
+  let cell = cells.get(model);
+  if (!cell) {
+    cell = { model, tokens: 0, cost: 0, messages: 0 };
+    cells.set(model, cell);
+  }
+  cell.tokens += row.tokens;
+  cell.cost += row.cost;
+  cell.messages += row.messages;
+}
+
+/** Trade an entry's cell map for the array the payload carries. */
+function serializeCells<T extends { models: ModelCells }>(rows: T[]) {
+  return rows.map(({ models, ...rest }) => ({
+    ...rest,
+    models: [...models.values()].sort(byTokensDesc),
+  }));
+}
+
+/** One range's aggregation state, filled row by row. */
+class RangeAgg {
+  totals = emptyMetrics();
+  byModel = new Map<string, Entry<{ model: string; providers: Set<string> }>>();
+  byClient = new Map<string, Entry<{ client: string; models: ModelCells }>>();
+  byProvider = new Map<string, Entry<{ provider: string; models: ModelCells }>>();
+  days = new Map<string, { tokens: number; messages: number }>();
+
+  constructor(readonly from: string | null) {}
+
+  add(row: UsageRow, model: string): void {
+    addMetrics(this.totals, row);
+
+    const entry = fold(this.byModel, model, row, () => ({ model, providers: new Set<string>() }));
+    if (row.provider) entry.providers.add(row.provider);
+    const client = fold(this.byClient, row.client, row, () => ({
+      client: row.client,
+      models: new Map() as ModelCells,
+    }));
+    addCell(client.models, model, row);
+    const provider = fold(this.byProvider, row.provider, row, () => ({
+      provider: row.provider,
+      models: new Map() as ModelCells,
+    }));
+    addCell(provider.models, model, row);
+
+    let day = this.days.get(row.date);
+    if (!day) {
+      day = { tokens: 0, messages: 0 };
+      this.days.set(row.date, day);
+    }
+    day.tokens += row.tokens;
+    day.messages += row.messages;
+  }
+
+  serialize() {
+    const dates = [...this.days.keys()].sort();
+    let activeDays = 0;
+    for (const day of this.days.values()) {
+      if (day.tokens > 0 || day.messages > 0) activeDays++;
+    }
+    return {
+      from: this.from,
+      totals: {
+        ...this.totals,
+        activeDays,
+        firstDate: dates[0] ?? null,
+        lastDate: dates[dates.length - 1] ?? null,
+      },
+      byModel: serializeEntries(this.byModel).map(({ providers, ...rest }) => ({
+        ...rest,
+        providers: [...providers].sort(),
+      })),
+      byClient: serializeCells(serializeEntries(this.byClient)),
+      byProvider: serializeCells(serializeEntries(this.byProvider)),
+    };
+  }
+}
+
+/**
+ * Every stored plan, in a stable order so an unchanged payload hashes to
+ * an unchanged ETag. A caller that just wrote one passes it in: KV is
+ * eventually consistent, so a write followed by its own read can still
+ * answer with the previous value, and the moment the number matters most
+ * is the moment it changed.
+ */
+async function readQuota(env: Env, fresh?: QuotaPlan): Promise<QuotaPlan[]> {
+  const ids = [...QUOTA_PROVIDERS.values()].map(({ provider }) => provider);
+  const stored = await Promise.all(
+    ids.map((provider) =>
+      env.CACHE.get<QuotaPlan>(quotaKey(provider), {
+        type: "json",
+        cacheTtl: KV_CACHE_TTL,
+      })
+    )
+  );
+  const plans = stored.filter((plan): plan is QuotaPlan => plan !== null);
+  if (fresh) {
+    const at = plans.findIndex(({ provider }) => provider === fresh.provider);
+    if (at === -1) plans.push(fresh);
+    else plans[at] = fresh;
+  }
+  return plans.sort((a, b) => ids.indexOf(a.provider) - ids.indexOf(b.provider));
+}
+
+/**
+ * `quota` is the freshly reported plan, when the caller is the endpoint
+ * that just stored one — see readQuota.
+ */
+export async function composeSiteBody(
+  env: Env,
+  today = isoToday(),
+  quota?: QuotaPlan
+): Promise<string> {
+  const quotaPlans = await readQuota(env, quota);
+
+  // `u.date <= ?1` on all three statements is the one place the payload
+  // is bounded as of today, so ranges, the daily series and the device
+  // inventory agree by construction. Submissions may legitimately carry
+  // dates up to two days ahead (payload.ts keeps the official clock-skew
+  // allowance, and a device east of Asia/Shanghai really is a day ahead
+  // for part of the evening), but a row dated tomorrow has nowhere to go
+  // in a dashboard whose windows all end today: unbounded it would land
+  // in "Today" next to an active time filtered by exact date, and the
+  // section would contradict itself. Such rows wait in D1 for their own
+  // day, which the snapshot day-rollover guard then composes. On
+  // the device join the bound belongs in the ON clause — a WHERE would
+  // turn the LEFT JOIN inner and drop devices that have only reported
+  // future-dated rows.
+  const [usage, activity, deviceRows] = await env.TOKENS_DB.batch([
+    env.TOKENS_DB.prepare(
+      `SELECT u.date, u.client, u.model, u.provider, ${METRICS_SQL}
+       FROM daily_usage u
+       WHERE u.date <= ?1
+       GROUP BY u.date, u.client, u.model, u.provider
+       ORDER BY u.date`
+    ).bind(today),
+    env.TOKENS_DB.prepare(
+      `SELECT u.date, sum(u.active_time_ms) AS active
+       FROM daily_activity u WHERE u.date <= ?1 GROUP BY u.date ORDER BY u.date`
+    ).bind(today),
+    env.TOKENS_DB.prepare(
+      `SELECT d.name, d.first_seen AS firstSeen, d.last_seen AS lastSeen,
+              d.cli_version AS cliVersion, d.session_count AS sessions,
+              d.total_active_time_ms AS activeMs,
+              d.longest_continuous_ms AS longestMs,
+              d.max_concurrent_sessions AS maxConcurrent,
+              d.mcp_servers AS mcpServers,
+              count(DISTINCT u.date) AS activeDays,
+              sum(${TOKENS_SQL}) AS tokens,
+              sum(u.messages) AS messages,
+              sum(u.cost) AS cost
+       FROM devices d LEFT JOIN daily_usage u
+              ON u.device_id = d.id AND u.date <= ?1
+       GROUP BY d.id ORDER BY d.last_seen DESC`
+    ).bind(today),
+  ]);
+
+  const aggs = RANGES.map(
+    ({ days }) => new RangeAgg(days ? shiftDays(today, 1 - days) : null)
+  );
+  const daily = new Map<string, SiteDay>();
+  const dayFor = (date: string): SiteDay => {
+    let day = daily.get(date);
+    if (!day) {
+      day = {
+        date,
+        tokens: 0,
+        cost: 0,
+        messages: 0,
+        providers: emptySlices(),
+        clients: emptySlices(),
+      };
+      daily.set(date, day);
+    }
+    return day;
+  };
+  const addSlice = <T extends DaySlice>(
+    slices: Record<string, T>,
+    key: string,
+    row: UsageRow,
+    make: () => T
+  ): T => {
+    const slot = slices[key] ?? make();
+    slot.tokens += row.tokens;
+    slot.cost += row.cost;
+    slices[key] = slot;
+    return slot;
+  };
+  const slice = (): DaySlice => ({ tokens: 0, cost: 0 });
+
+  for (const row of usage.results as unknown as UsageRow[]) {
+    const model = canonicalModel(row.model);
+    row.provider = canonicalProvider(row.provider, row.model);
+    for (const agg of aggs) {
+      // Only the lower bound is checked here: every range ends today,
+      // and the query already stops there.
+      if (agg.from === null || row.date >= agg.from) agg.add(row, model);
+    }
+    const day = dayFor(row.date);
+    day.tokens += row.tokens;
+    day.cost += row.cost;
+    day.messages += row.messages;
+    if (row.tokens > 0 || row.cost > 0) {
+      addSlice(day.providers, row.provider || "unknown", row, slice);
+      const client = addSlice(day.clients, row.client || "unknown", row, () => ({
+        tokens: 0,
+        cost: 0,
+        models: emptySlices<DaySlice>(),
+      }));
+      addSlice(client.models, model || "unknown", row, slice);
+    }
+  }
+
+  for (const row of activity.results as unknown as DailyActivityRow[]) {
+    if (!row.active || row.active <= 0) continue;
+    dayFor(row.date).active = row.active;
+  }
+
+  const ranges: Record<string, unknown> = {};
+  RANGES.forEach(({ key }, i) => {
+    ranges[key] = aggs[i].serialize();
+  });
+
+  const devices = (deviceRows.results as unknown as DeviceRow[]).map((device) => ({
+    name: device.name?.trim() || "Unnamed device",
+    firstSeen: device.firstSeen,
+    lastSeen: device.lastSeen,
+    cliVersion: device.cliVersion,
+    sessions: device.sessions,
+    activeMs: device.activeMs,
+    longestMs: device.longestMs,
+    maxConcurrent: device.maxConcurrent,
+    mcpServers:
+      typeof device.mcpServers === "string" ? (JSON.parse(device.mcpServers) as string[]) : null,
+    activeDays: device.activeDays,
+    tokens: device.tokens ?? 0,
+    messages: device.messages ?? 0,
+    cost: device.cost ?? 0,
+  }));
+
+  return JSON.stringify(
+    {
+      schemaVersion: SITE_VERSION,
+      deviceOnlineWithinMs: DEVICE_ONLINE_WITHIN_MS,
+      generatedAt: new Date().toISOString(),
+      today,
+      quota: quotaPlans,
+      ranges,
+      daily: [...daily.values()].sort((a, b) => (a.date < b.date ? -1 : 1)),
+      devices,
+    },
+    roundCost
+  );
+}
+
+/**
+ * Costs are floats summed in JS, so they carry the usual artefacts —
+ * `6.441234195199998` — and every digit ships to the browser. Rounding
+ * to microdollars is smaller and more honest: nothing upstream knows a
+ * cost to the 17th decimal. A replacer, so it reaches every `cost` in
+ * the tree instead of one forgettable call site per aggregation.
+ */
+function roundCost(key: string, value: unknown): unknown {
+  return key === "cost" && typeof value === "number"
+    ? Math.round(value * 1e6) / 1e6
+    : value;
+}
+
+/** The tokens view, served at `GET /tokens/site` (lib/snapshot.ts). */
+export const tokensSite: Snapshot = {
+  key: "tokens:site",
+  version: SITE_VERSION,
+  compose: (env, today) => composeSiteBody(env, today),
+};
+
+/**
+ * Drop every stored plan. Quota is reported data like any other, and it
+ * names the account's subscription, so the full wipe takes it along.
+ */
+export async function wipeQuota(env: Env): Promise<void> {
+  await Promise.all(
+    [...QUOTA_PROVIDERS.values()].map(({ provider }) =>
+      env.CACHE.delete(quotaKey(provider))
+    )
+  );
+}
+
+/**
+ * Recompute the site payload and store it — the write every accepted
+ * submission and quota report ends with.
+ *
+ * Passing a quota plan persists it in the same call and composes the
+ * payload from that same in-memory value, so the collector's write and
+ * the view it appears in cannot disagree (KV is eventually consistent:
+ * writing the plan and reading it back could still see the old one).
+ * Without it the stored plans are read back and carried through
+ * unchanged — a submission must never drop a quota card just because it
+ * had nothing to say about quota.
+ */
+export async function refreshSiteCache(env: Env, quota?: QuotaPlan): Promise<void> {
+  if (quota) await env.CACHE.put(quotaKey(quota.provider), JSON.stringify(quota));
+  const today = isoToday();
+  await store(env, tokensSite, await composeSiteBody(env, today, quota), today);
+}

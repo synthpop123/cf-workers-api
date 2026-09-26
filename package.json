@@ -1,0 +1,19 @@
+{
+  "name": "cf-workers-api",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Every backend lkwplus.com reads, in one Cloudflare Worker at api.lkwplus.com",
+  "scripts": {
+    "dev": "wrangler dev",
+    "types": "wrangler types",
+    "test": "vitest run",
+    "check": "npm run types && tsc -p test --noEmit && vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.141.0"
+  }
+}

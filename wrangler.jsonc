@@ -1,0 +1,83 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Must match the Worker's name in the Cloudflare dashboard, or Workers
+  // Builds fails.
+  "name": "cf-workers-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "api.lkwplus.com", "custom_domain": true }],
+
+  // Plain config lives here, not in the dashboard: a deploy replaces the
+  // dashboard's variables with these (secrets are kept).
+  "vars": {
+    // The username the tokens CLI is told it submitted as.
+    "TOKENS_USERNAME": "lkw123",
+    // Public base of the IMAGES bucket.
+    "IMAGE_BASE_URL": "https://img.lkwplus.com",
+    // The self-hosted AirTrail instance the flights service reads.
+    "AIRTRAIL_URL": "https://flight.lkwplus.com",
+    // The self-hosted Koito instance the music service reads.
+    "KOITO_URL": "https://music.lkwplus.com",
+    // Whose Letterboxd diary the movies service reads.
+    "LETTERBOXD_USER": "lkw123"
+  },
+
+  // Set with `npx wrangler secret put <NAME>`; .dev.vars locally. Declared
+  // so `wrangler types` types them on Env and `wrangler dev` warns when
+  // one is missing. Never a dashboard *variable* — the next deploy wipes
+  // those; secrets survive deploys.
+  "secrets": {
+    "required": [
+      // Bearer for the tokens CLI and the quota collectors.
+      "TOKENS_API_TOKEN",
+      // Bearer for POST /switch/sync.
+      "SWITCH_API_TOKEN",
+      // Nintendo Account session token for the Parental Controls app.
+      "PCTL_SESSION_TOKEN",
+      // AirTrail API key (sent as Authorization: Bearer).
+      "AIRTRAIL_API_KEY"
+    ]
+  },
+
+  // The service page. Assets match before the Worker runs, so "/" serves
+  // public/index.html and every API path falls through to the router.
+  "assets": { "directory": "./public" },
+
+  // Every public snapshot (lib/snapshot.ts) plus the tokens quota plans,
+  // under keys namespaced by service: `tokens:site`, `flights:site`, …
+  "kv_namespaces": [{ "binding": "CACHE", "id": "57ae0982f2914c6eb64c38b5e54e0613" }],
+
+  // One database per service that keeps history. Migrations are
+  // append-only and matched by filename — never rename or collapse them.
+  "d1_databases": [
+    {
+      "binding": "TOKENS_DB",
+      "database_name": "tokens-usage",
+      "database_id": "0e09184d-7b08-40df-90ee-34ae44477f93",
+      "migrations_dir": "./migrations/tokens"
+    },
+    {
+      "binding": "SWITCH_DB",
+      "database_name": "switch-play",
+      "database_id": "1577960c-df07-4823-a219-a0a5b8180cd0",
+      "migrations_dir": "./migrations/switch"
+    }
+  ],
+
+  "r2_buckets": [
+    // Raw tokens submissions + daily D1 exports (services/tokens/backup.ts).
+    { "binding": "TOKENS_ARCHIVE", "bucket_name": "tokens-archive" },
+    // Shared public image bucket at IMAGE_BASE_URL; each service writes
+    // under its own prefix (switch/, movies/).
+    { "binding": "IMAGES", "bucket_name": "imagebed" }
+  ],
+
+  // Keys must match SCHEDULE in src/schedule.ts (checked by the tests).
+  "triggers": {
+    "crons": ["*/5 * * * *", "0 1 * * *"]
+  },
+
+  "observability": { "enabled": true }
+}
