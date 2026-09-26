@@ -6,6 +6,7 @@ import {
   refreshExchangeRate,
   resolveStoreFacts,
 } from "../../src/services/switch/store";
+import { captureErrors } from "../helpers";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -61,6 +62,7 @@ describe("fetchStoreFacts", () => {
   });
 
   it("returns nothing a storefront could not answer", async () => {
+    const logged = captureErrors();
     storefronts(page("", 404), page(ld(offer("19.99", "USD", "Test Game"))));
     expect(await fetchStoreFacts("A")).toEqual({
       priceCents: null,
@@ -69,6 +71,7 @@ describe("fetchStoreFacts", () => {
 
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
     expect(await fetchStoreFacts("A")).toEqual({ priceCents: null, title: null });
+    expect(logged).toHaveBeenCalled();
   });
 });
 

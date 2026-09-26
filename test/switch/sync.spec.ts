@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runSync } from "../../src/services/switch/sync";
 import type { Env } from "../../src/env";
 import type { DailySummary } from "../../src/services/switch/moon/types";
+import { captureErrors } from "../helpers";
 
 const bindings = { ...env, PCTL_SESSION_TOKEN: "test-session" } as Env;
 const cover = "https://example.com/i/c/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_256";
@@ -202,6 +203,7 @@ describe("runSync", () => {
   });
 
   it("keeps syncing when optional settings, artwork, stores and rates fail", async () => {
+    const logged = captureErrors();
     failExtras = true;
     expect(await runSync(bindings)).toMatchObject({ ok: true, priceCount: 0 });
     expect(await game()).toMatchObject({
@@ -209,5 +211,6 @@ describe("runSync", () => {
       first_play_date: null,
       image_key: null,
     });
+    expect(logged).toHaveBeenCalled();
   });
 });

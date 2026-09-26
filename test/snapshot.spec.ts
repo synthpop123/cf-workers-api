@@ -9,6 +9,7 @@ import {
   type Snapshot,
   type SnapshotMeta,
 } from "../src/lib/snapshot";
+import { captureErrors } from "./helpers";
 
 /** A snapshot whose body the test controls, counting compositions. */
 function fake(initial: string) {
@@ -74,20 +75,24 @@ describe("snapshots", () => {
   });
 
   it("serves an earlier day's copy when the recompose fails", async () => {
+    const logged = captureErrors();
     const { snapshot, state } = fake("a");
     await refresh(env, snapshot);
     vi.setSystemTime(new Date("2026-09-08T05:00:00Z"));
     state.fail = true;
     const stale = await load(env, snapshot);
     expect(JSON.parse(stale!.text).today).toBe("2026-09-06");
+    expect(logged).toHaveBeenCalled();
   });
 
   it("never serves a copy of another schema version", async () => {
+    const logged = captureErrors();
     const { snapshot, state } = fake("a");
     await refresh(env, { ...snapshot, version: 2 });
     expect(await read(env, snapshot)).toBeNull();
     state.fail = true;
     expect(await load(env, snapshot)).toBeNull();
+    expect(logged).toHaveBeenCalled();
   });
 
   it("serves 200 and 304 with one header set, matching weakened ETags", async () => {
@@ -109,10 +114,12 @@ describe("snapshots", () => {
   });
 
   it("answers 503 when there is nothing to serve", async () => {
+    const logged = captureErrors();
     const { snapshot, state } = fake("a");
     state.fail = true;
     const handler = siteHandler(snapshot);
     const response = await handler(new Request("https://api.test/"), env, {} as ExecutionContext);
     expect(response.status).toBe(503);
+    expect(logged).toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isDue, minuteOfDay, runScheduled, TRIGGERS } from "../src/schedule";
+import { captureErrors } from "./helpers";
 
 /** An instant given as Asia/Shanghai wall-clock time. */
 const local = (time: string) => new Date(`2026-09-26T${time}:00+08:00`);
@@ -48,6 +49,7 @@ describe("runScheduled", () => {
   };
 
   it("asks only the upstreams whose jobs are due", async () => {
+    const logged = captureErrors();
     const hosts = upstreams();
     await runScheduled("*/5 * * * *", local("10:05"), env);
     expect(new Set(hosts)).toEqual(new Set(["music.lkwplus.com"]));
@@ -57,11 +59,12 @@ describe("runScheduled", () => {
     expect(new Set(hosts)).toEqual(
       new Set(["music.lkwplus.com", "letterboxd.com", "flight.lkwplus.com"])
     );
+    expect(logged).toHaveBeenCalled();
   });
 
   it("logs a failing job instead of throwing", async () => {
     upstreams();
-    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const logged = captureErrors();
     await expect(runScheduled("*/5 * * * *", local("10:05"), env)).resolves.toBeUndefined();
     expect(logged).toHaveBeenCalledWith("refresh music:site failed", expect.any(Error));
   });

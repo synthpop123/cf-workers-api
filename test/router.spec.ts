@@ -1,7 +1,7 @@
 import { createExecutionContext, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { createRouter } from "../src/lib/router";
-import { call } from "./helpers";
+import { call, captureErrors } from "./helpers";
 
 describe("routing", () => {
   it.each([
@@ -44,6 +44,7 @@ describe("routing", () => {
   });
 
   it("answers a thrown handler with JSON and CORS, not the runtime's bare 500", async () => {
+    const logged = captureErrors();
     const router = createRouter([
       [
         "GET /boom",
@@ -60,6 +61,7 @@ describe("routing", () => {
     expect(response.status).toBe(500);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(await response.json()).toEqual({ error: "Internal error" });
+    expect(logged).toHaveBeenCalled();
   });
 
   it("refuses a duplicate route", () => {

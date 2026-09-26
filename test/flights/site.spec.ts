@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { refresh } from "../../src/lib/snapshot";
 import { flightsSite } from "../../src/services/flights";
 import { SITE_VERSION } from "../../src/services/flights/compose";
-import { call } from "../helpers";
+import { call, captureErrors } from "../helpers";
 import { upstream } from "./fixtures";
 
 /** Answer AirTrail's list with these flights, checking the key goes along. */
@@ -38,9 +38,11 @@ describe("GET /flights/site", () => {
   });
 
   it("answers 503 when AirTrail is down and nothing is stored", async () => {
+    const logged = captureErrors();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("down", { status: 503 }));
     const response = await call("/flights/site");
     expect(response.status).toBe(503);
+    expect(logged).toHaveBeenCalled();
   });
 
   it("is refreshed by the heartbeat rather than by reads", async () => {

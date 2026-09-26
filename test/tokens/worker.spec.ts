@@ -9,6 +9,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SITE_VERSION } from "../../src/services/tokens/site";
 import { AUTH, call, DEVICE_ID, reset, submissionPayload, submit } from "./helpers";
+import { captureErrors } from "../helpers";
 
 beforeEach(() => reset());
 
@@ -218,6 +219,7 @@ describe("composition failures", () => {
   // than "CORS failure". Renaming the table away is the cheapest real D1
   // error.
   it("answers 503 with JSON and CORS when nothing is stored", async () => {
+    const logged = captureErrors();
     await env.CACHE.delete("tokens:site");
     await env.TOKENS_DB.prepare(`ALTER TABLE daily_usage RENAME TO daily_usage_hidden`).run();
     try {
@@ -228,5 +230,6 @@ describe("composition failures", () => {
     } finally {
       await env.TOKENS_DB.prepare(`ALTER TABLE daily_usage_hidden RENAME TO daily_usage`).run();
     }
+    expect(logged).toHaveBeenCalled();
   });
 });

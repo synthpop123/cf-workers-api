@@ -5,7 +5,7 @@ import { flightsSite } from "../src/services/flights";
 import { moviesSite } from "../src/services/movies";
 import { musicSite } from "../src/services/music";
 import { switchSite } from "../src/services/switch/site";
-import { call } from "./helpers";
+import { call, captureErrors } from "./helpers";
 
 const SNAPSHOTS = [flightsSite, moviesSite, musicSite, switchSite];
 
@@ -38,11 +38,13 @@ describe("GET /misc", () => {
   });
 
   it("nulls only the section that has nothing to serve", async () => {
+    const logged = captureErrors();
     await seed();
     await env.CACHE.delete(musicSite.key);
     const body = await (await call("/misc")).json<Record<string, unknown>>();
     expect(body.music).toBeNull();
     expect(body.flights).not.toBeNull();
+    expect(logged).toHaveBeenCalled();
   });
 
   it("304s until any one section changes", async () => {

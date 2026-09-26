@@ -1,10 +1,11 @@
 /**
- * Runs the real Worker export against the miniflare-backed bindings,
+ * Test plumbing. `call` runs the real Worker export against the miniflare-backed bindings,
  * waiting out ctx.waitUntil so KV/R2 fan-out has settled before a test
  * asserts on it.
  */
 
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { vi } from "vitest";
 import worker from "../src/index";
 
 const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
@@ -21,4 +22,13 @@ export async function call(
   );
   await waitOnExecutionContext(ctx);
   return response;
+}
+
+/**
+ * For a test that walks a failure path on purpose: captures console.error
+ * so the expected log does not read as a failure in CI output, and returns
+ * the spy so the test can assert the failure was in fact logged.
+ */
+export function captureErrors() {
+  return vi.spyOn(console, "error").mockImplementation(() => {});
 }
