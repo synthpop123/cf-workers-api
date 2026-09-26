@@ -2,15 +2,32 @@
   "name": "cf-workers-api",
   "version": "1.0.0",
   "private": true,
-  "license": "MIT",
   "description": "Every backend lkwplus.com reads, in one Cloudflare Worker at api.lkwplus.com",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/synthpop123/cf-workers-api.git"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "d1",
+    "kv",
+    "r2",
+    "personal-api"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "types": "wrangler types",
     "test": "vitest run",
-    "check": "npm run types && tsc -p test --noEmit && vitest run"
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check": "npm run types && npm run format:check && tsc -p test --noEmit && vitest run"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.10",
