@@ -1,10 +1,10 @@
 name: CI
 
 # Pushing to main deploys (Cloudflare Workers Builds), so this runs the
-# same gate as the Workers Builds build command — `npm run check`: type
-# generation + typecheck (src and tests) + the vitest suite. A red run
-# here means the deploy that Workers Builds is doing in parallel was a
-# regression; branch pushes get the verdict before merging.
+# same gate as the Workers Builds build command, `npm run check`: type
+# generation, Biome format check, typecheck (src and tests) and the vitest
+# suite. A red run on main means the deploy Workers Builds ran in parallel
+# was a regression; pull requests get the verdict before merging.
 on:
   push:
     branches: [main]
