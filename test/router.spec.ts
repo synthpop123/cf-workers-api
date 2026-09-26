@@ -52,7 +52,11 @@ describe("routing", () => {
         },
       ],
     ]);
-    const response = await router(new Request("https://api.test/boom"), env, createExecutionContext());
+    const response = await router(
+      new Request("https://api.test/boom"),
+      env,
+      createExecutionContext()
+    );
     expect(response.status).toBe(500);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(await response.json()).toEqual({ error: "Internal error" });
@@ -60,6 +64,11 @@ describe("routing", () => {
 
   it("refuses a duplicate route", () => {
     const ok = () => new Response();
-    expect(() => createRouter([["GET /a", ok], ["GET /a", ok]])).toThrow("Duplicate route");
+    expect(() =>
+      createRouter([
+        ["GET /a", ok],
+        ["GET /a", ok],
+      ])
+    ).toThrow("Duplicate route");
   });
 });

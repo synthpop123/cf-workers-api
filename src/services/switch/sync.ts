@@ -13,12 +13,7 @@ import { coverSource, mirrorCover } from "./images";
 import { fetchIdToken } from "./moon/auth";
 import { MoonClient } from "./moon/client";
 import { MOON_CLIENT_CONFIG } from "./moon/config";
-import type {
-  DailySummary,
-  OwnedDevice,
-  ParentalControlSetting,
-  PlayedGame,
-} from "./moon/types";
+import type { DailySummary, OwnedDevice, ParentalControlSetting, PlayedGame } from "./moon/types";
 import { applicationId } from "./moon/types";
 import { refreshSiteCache } from "./site";
 import { refreshExchangeRate, resolveStoreFacts } from "./store";
@@ -274,11 +269,13 @@ function upsert<Row extends object>(
     return [];
   });
   const select = columns.map((c) => `json_extract(value, '$.${c}')`).join(", ");
-  return db.prepare(
-    `INSERT INTO ${table} (${columns.join(", ")})
+  return db
+    .prepare(
+      `INSERT INTO ${table} (${columns.join(", ")})
      SELECT ${select} FROM json_each(?) WHERE true
      ON CONFLICT (${conflict.join(", ")}) DO UPDATE SET ${update.join(", ")}`
-  ).bind(JSON.stringify(rows));
+    )
+    .bind(JSON.stringify(rows));
 }
 
 const DEVICES: TableSpec<DeviceRow> = {
@@ -410,14 +407,8 @@ export async function runSync(env: Env): Promise<SyncResult> {
     .run();
 
   try {
-    const moon = new MoonClient(
-      await fetchIdToken(env.PCTL_SESSION_TOKEN),
-      MOON_CLIENT_CONFIG
-    );
-    const [{ user }, { ownedDevices }] = await Promise.all([
-      moon.getUser(),
-      moon.getDevices(),
-    ]);
+    const moon = new MoonClient(await fetchIdToken(env.PCTL_SESSION_TOKEN), MOON_CLIENT_CONFIG);
+    const [{ user }, { ownedDevices }] = await Promise.all([moon.getUser(), moon.getDevices()]);
 
     const now = Date.now();
     const deviceRows: DeviceRow[] = [];
@@ -542,10 +533,7 @@ export async function runSync(env: Env): Promise<SyncResult> {
   }
 }
 
-function deviceRowFor(
-  device: OwnedDevice,
-  now: number
-): DeviceRow {
+function deviceRowFor(device: OwnedDevice, now: number): DeviceRow {
   const info = device.device;
   const lightUrl = info.iconUri?.lightTheme?.middle ?? info.iconUri?.lightTheme?.small ?? null;
   const darkUrl = info.iconUri?.darkTheme?.middle ?? info.iconUri?.darkTheme?.small ?? null;
@@ -566,7 +554,6 @@ function deviceRowFor(
     last_seen: now,
     raw: redact(device),
   };
-
 }
 
 interface SettingRow {
@@ -578,7 +565,13 @@ interface SettingRow {
 }
 
 interface WriteSet {
-  user: { nintendoAccountId: string; nickname: string; country?: string; language?: string; miiUri?: { medium?: string } };
+  user: {
+    nintendoAccountId: string;
+    nickname: string;
+    country?: string;
+    language?: string;
+    miiUri?: { medium?: string };
+  };
   deviceRows: DeviceRow[];
   players: PlayerRow[];
   summaryRows: SummaryRow[];

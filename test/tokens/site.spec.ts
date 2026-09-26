@@ -12,20 +12,20 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { isoToday } from "../../src/lib/http";
 import { SITE_VERSION } from "../../src/services/tokens/site";
-import {
-  call,
-  reportClaudeQuota,
-  reportQuota,
-  reset,
-  submissionPayload,
-  submit,
-} from "./helpers";
+import { call, reportClaudeQuota, reportQuota, reset, submissionPayload, submit } from "./helpers";
 
 beforeEach(() => reset());
 
 const RANGE_KEYS = ["week", "month", "quarter", "all"] as const;
 const METRIC_KEYS = [
-  "input", "output", "cacheRead", "cacheWrite", "reasoning", "tokens", "messages", "cost",
+  "input",
+  "output",
+  "cacheRead",
+  "cacheWrite",
+  "reasoning",
+  "tokens",
+  "messages",
+  "cost",
 ] as const;
 const SPAN_KEYS = ["days", "firstDate", "lastDate"] as const;
 
@@ -170,11 +170,17 @@ function expectSiteContract(site: Record<string, any>): void {
     // Nullable metadata must be null or the right type, never undefined
     // or a lookalike (the consumer's isDevice rejects e.g. a string
     // mcpServers, whose truthy .length would reach .join() otherwise).
-    for (const field of ["firstSeen", "lastSeen", "sessions", "activeMs", "longestMs", "maxConcurrent"]) {
-      expect(
-        device[field] === null || typeof device[field] === "number",
-        `devices.${field}`
-      ).toBe(true);
+    for (const field of [
+      "firstSeen",
+      "lastSeen",
+      "sessions",
+      "activeMs",
+      "longestMs",
+      "maxConcurrent",
+    ]) {
+      expect(device[field] === null || typeof device[field] === "number", `devices.${field}`).toBe(
+        true
+      );
     }
     expect(
       device.cliVersion === null || typeof device.cliVersion === "string",

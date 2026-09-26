@@ -46,7 +46,5 @@ export async function mirrorCover(
 /** Pick the cover size the mirror stores, falling back through the bag. */
 export function coverSource(uri: ImageUri | undefined | null): string | null {
   if (!uri) return null;
-  return (
-    uri[COVER_SIZE] ?? uri.small ?? uri.large ?? uri.extraLarge ?? uri.extraSmall ?? null
-  );
+  return uri[COVER_SIZE] ?? uri.small ?? uri.large ?? uri.extraLarge ?? uri.extraSmall ?? null;
 }

@@ -46,7 +46,7 @@ beforeEach(async () => {
       "account",
       "sync_runs",
       "exchange_rates",
-    ].map((t) => env.SWITCH_DB.prepare(`DELETE FROM ${t}`)),
+    ].map((t) => env.SWITCH_DB.prepare(`DELETE FROM ${t}`))
   );
   days = [day("2026-09-01", "Older", 20), day("2026-09-02", "Latest", 30)];
   extraDevices = new Map();
@@ -95,7 +95,8 @@ beforeEach(async () => {
   });
 });
 afterEach(() => vi.restoreAllMocks());
-const game = () => env.SWITCH_DB.prepare("SELECT * FROM games WHERE application_id = 'GAME'").first();
+const game = () =>
+  env.SWITCH_DB.prepare("SELECT * FROM games WHERE application_id = 'GAME'").first();
 
 describe("runSync", () => {
   it("sums repeated game entries, enriches without replacing titles, and redacts PINs", async () => {
@@ -114,14 +115,16 @@ describe("runSync", () => {
       expect(JSON.stringify(rows)).not.toMatch(/private-pin|unlockCode|synchronizedUnlockCode/);
     }
     expect(
-      await env.SWITCH_DB.prepare("SELECT status FROM sync_runs WHERE id = ?").bind(result.syncId).first(),
+      await env.SWITCH_DB.prepare("SELECT status FROM sync_runs WHERE id = ?")
+        .bind(result.syncId)
+        .first()
     ).toEqual({ status: "ok" });
   });
 
   it("recomputes totals and preserves days outside the rolling window on repeat syncs", async () => {
     await runSync(bindings);
     await env.SWITCH_DB.prepare(
-      "UPDATE games SET first_seen = 42, shop_url = 'https://shop.example/game'",
+      "UPDATE games SET first_seen = 42, shop_url = 'https://shop.example/game'"
     ).run();
     days = [day("2026-09-02", "Latest", 40)];
     await runSync(bindings);
@@ -161,10 +164,12 @@ describe("runSync", () => {
       last_played_date: "2026-09-02",
     });
     expect(
-      await env.SWITCH_DB.prepare("SELECT COUNT(*) AS n FROM daily_games").first<{ n: number }>(),
+      await env.SWITCH_DB.prepare("SELECT COUNT(*) AS n FROM daily_games").first<{ n: number }>()
     ).toEqual({ n: 3 });
     expect(
-      await env.SWITCH_DB.prepare("SELECT device_id FROM setting_snapshots ORDER BY device_id").all(),
+      await env.SWITCH_DB.prepare(
+        "SELECT device_id FROM setting_snapshots ORDER BY device_id"
+      ).all()
     ).toMatchObject({ results: [{ device_id: "device" }, { device_id: "second" }] });
   });
 
@@ -172,7 +177,7 @@ describe("runSync", () => {
     whitelist.push({ applicationId: "OWNED", title: "Owned only", firstPlayDate: "2026-07-01" });
     await runSync(bindings);
     expect(
-      await env.SWITCH_DB.prepare("SELECT * FROM games WHERE application_id = 'OWNED'").first(),
+      await env.SWITCH_DB.prepare("SELECT * FROM games WHERE application_id = 'OWNED'").first()
     ).toMatchObject({
       title: "Owned only",
       first_play_date: "2026-07-01",

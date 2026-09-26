@@ -89,7 +89,13 @@ describe("deriveRevisionFloors", () => {
   it("takes the max stored revision per client across all days", () => {
     const stored: Map<string, DayState> = new Map([
       ["2026-07-01", dayState([["cursor", 2, "gpt-5", 10]])],
-      ["2026-07-02", dayState([["cursor", 4, "gpt-5", 10], ["claude", 1, "opus", 5]])],
+      [
+        "2026-07-02",
+        dayState([
+          ["cursor", 4, "gpt-5", 10],
+          ["claude", 1, "opus", 5],
+        ]),
+      ],
     ]);
     const floors = deriveRevisionFloors(stored);
     expect(floors.get("cursor")).toBe(4);
@@ -100,8 +106,16 @@ describe("deriveRevisionFloors", () => {
 describe("extractCoverages", () => {
   it("keeps only mode=full windows", () => {
     const coverages = extractCoverages([
-      { client: "cursor", parserRevision: 3, coverage: { mode: "full", start: "2026-07-01", end: "2026-07-10" } },
-      { client: "claude", parserRevision: 3, coverage: { mode: "partial", start: "2026-07-01", end: "2026-07-10" } },
+      {
+        client: "cursor",
+        parserRevision: 3,
+        coverage: { mode: "full", start: "2026-07-01", end: "2026-07-10" },
+      },
+      {
+        client: "claude",
+        parserRevision: 3,
+        coverage: { mode: "partial", start: "2026-07-01", end: "2026-07-10" },
+      },
       { client: "zed", parserRevision: 3 },
     ]);
     expect(coverages).toEqual([{ client: "cursor", start: "2026-07-01", end: "2026-07-10" }]);
@@ -168,9 +182,19 @@ describe("mergeDay", () => {
   });
 
   it("tombstones covered clients on days the submission no longer mentions", () => {
-    const stored = dayState([["cursor", 2, "gpt-5", 100], ["claude", 2, "opus", 50]]);
+    const stored = dayState([
+      ["cursor", 2, "gpt-5", 100],
+      ["claude", 2, "opus", 50],
+    ]);
     const coverages = [{ client: "cursor", start: "2026-07-01", end: "2026-07-31" }];
-    const { merged, warnings } = mergeDay("2026-07-05", stored, undefined, submitted, none, coverages);
+    const { merged, warnings } = mergeDay(
+      "2026-07-05",
+      stored,
+      undefined,
+      submitted,
+      none,
+      coverages
+    );
     expect(merged.has("cursor")).toBe(false);
     expect(clientTokens(merged.get("claude")!)).toBe(50);
     expect(warnings.some((w) => w.includes("authoritative replacement coverage"))).toBe(true);
@@ -180,7 +204,14 @@ describe("mergeDay", () => {
     const stored = dayState([["cursor", 2, "gpt-5", 100]]);
     const incoming = aggregateIncomingDay([contribution("cursor", "gpt-5", 40, 2)]);
     const coverages = [{ client: "cursor", start: "2026-07-01", end: "2026-07-31" }];
-    const { merged, warnings } = mergeDay("2026-07-05", stored, incoming, submitted, none, coverages);
+    const { merged, warnings } = mergeDay(
+      "2026-07-05",
+      stored,
+      incoming,
+      submitted,
+      none,
+      coverages
+    );
     // Coverage removed the stored rows first, so the regression guard has
     // nothing to preserve: the 40-token rescan is authoritative.
     expect(clientTokens(merged.get("cursor")!)).toBe(40);
@@ -215,7 +246,15 @@ describe("daysEqual", () => {
     b.get("cursor")!.models.get(modelKey("gpt-5", ""))!.input = 101;
     expect(daysEqual(base(), b)).toBe(false);
     expect(daysEqual(undefined, base())).toBe(false);
-    expect(daysEqual(base(), dayState([["cursor", 2, "gpt-5", 100], ["zed", 1, "gpt-5", 1]]))).toBe(false);
+    expect(
+      daysEqual(
+        base(),
+        dayState([
+          ["cursor", 2, "gpt-5", 100],
+          ["zed", 1, "gpt-5", 1],
+        ])
+      )
+    ).toBe(false);
   });
 });
 
@@ -223,7 +262,13 @@ describe("collectSubmittedClients", () => {
   it("unions summary clients and contribution clients", () => {
     const set = collectSubmittedClients(
       ["cursor", ""],
-      [{ date: "2026-07-01", totals: { tokens: 0, cost: 0, messages: 0 }, clients: [contribution("claude", "opus", 1)] }]
+      [
+        {
+          date: "2026-07-01",
+          totals: { tokens: 0, cost: 0, messages: 0 },
+          clients: [contribution("claude", "opus", 1)],
+        },
+      ]
     );
     expect(set.has("cursor")).toBe(true);
     expect(set.has("claude")).toBe(true);

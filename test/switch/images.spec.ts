@@ -62,9 +62,7 @@ describe("mirrorCover", () => {
 
 describe("publicUrl", () => {
   it("joins the configured base with the object key", () => {
-    expect(publicUrl(env, "switch/games/x.jpg")).toBe(
-      `${env.IMAGE_BASE_URL}/switch/games/x.jpg`
-    );
+    expect(publicUrl(env, "switch/games/x.jpg")).toBe(`${env.IMAGE_BASE_URL}/switch/games/x.jpg`);
     expect(publicUrl(env, null)).toBeNull();
   });
 });

@@ -367,9 +367,7 @@ export async function composeSiteBody(
     ).bind(today),
   ]);
 
-  const aggs = RANGES.map(
-    ({ days }) => new RangeAgg(days ? shiftDays(today, 1 - days) : null)
-  );
+  const aggs = RANGES.map(({ days }) => new RangeAgg(days ? shiftDays(today, 1 - days) : null));
   const daily = new Map<string, SiteDay>();
   const dayFor = (date: string): SiteDay => {
     let day = daily.get(date);
@@ -473,9 +471,7 @@ export async function composeSiteBody(
  * the tree instead of one forgettable call site per aggregation.
  */
 function roundCost(key: string, value: unknown): unknown {
-  return key === "cost" && typeof value === "number"
-    ? Math.round(value * 1e6) / 1e6
-    : value;
+  return key === "cost" && typeof value === "number" ? Math.round(value * 1e6) / 1e6 : value;
 }
 
 /** The tokens view, served at `GET /tokens/site` (lib/snapshot.ts). */
@@ -491,9 +487,7 @@ export const tokensSite: Snapshot = {
  */
 export async function wipeQuota(env: Env): Promise<void> {
   await Promise.all(
-    [...QUOTA_PROVIDERS.values()].map(({ provider }) =>
-      env.CACHE.delete(quotaKey(provider))
-    )
+    [...QUOTA_PROVIDERS.values()].map(({ provider }) => env.CACHE.delete(quotaKey(provider)))
   );
 }
 

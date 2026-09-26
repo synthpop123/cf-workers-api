@@ -141,16 +141,14 @@ interface DeviceRecord {
 
 async function loadDevice(env: Env, deviceId: string): Promise<DeviceRecord> {
   const [usageRes, activityRes] = await env.TOKENS_DB.batch([
-    env.TOKENS_DB
-      .prepare(
-        `SELECT date, client, model, provider, input, output, cache_read,
+    env.TOKENS_DB.prepare(
+      `SELECT date, client, model, provider, input, output, cache_read,
                 cache_write, reasoning, messages, cost, parser_revision
          FROM daily_usage WHERE device_id = ?`
-      )
-      .bind(deviceId),
-    env.TOKENS_DB
-      .prepare(`SELECT date, active_time_ms FROM daily_activity WHERE device_id = ?`)
-      .bind(deviceId),
+    ).bind(deviceId),
+    env.TOKENS_DB.prepare(
+      `SELECT date, active_time_ms FROM daily_activity WHERE device_id = ?`
+    ).bind(deviceId),
   ]);
   const storedRows = usageRes.results as unknown as StoredUsageRow[];
   const stored = buildStoredState(storedRows);
@@ -257,9 +255,18 @@ function planStatements(
       for (const [key, m] of data.models) {
         const sep = key.indexOf("\u0000");
         usageRows.push([
-          date, client, key.slice(0, sep), key.slice(sep + 1),
-          m.input, m.output, m.cacheRead, m.cacheWrite, m.reasoning,
-          m.messages, m.cost, data.revision,
+          date,
+          client,
+          key.slice(0, sep),
+          key.slice(sep + 1),
+          m.input,
+          m.output,
+          m.cacheRead,
+          m.cacheWrite,
+          m.reasoning,
+          m.messages,
+          m.cost,
+          data.revision,
         ]);
       }
     }
@@ -296,9 +303,8 @@ function planStatements(
     ? payload.mcpServers.filter((s): s is string => typeof s === "string" && s.length > 0)
     : null;
   statements.push(
-    env.TOKENS_DB
-      .prepare(
-        `INSERT INTO devices
+    env.TOKENS_DB.prepare(
+      `INSERT INTO devices
            (id, name, first_seen, last_seen, cli_version, total_active_time_ms,
             longest_continuous_ms, max_concurrent_sessions, session_count, mcp_servers)
          VALUES (?1, ?2, ?3, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
@@ -311,45 +317,42 @@ function planStatements(
            max_concurrent_sessions = coalesce(excluded.max_concurrent_sessions, max_concurrent_sessions),
            session_count = coalesce(excluded.session_count, session_count),
            mcp_servers = coalesce(excluded.mcp_servers, mcp_servers)`
-      )
-      .bind(
-        deviceId,
-        deviceName,
-        now,
-        payload.meta?.version ?? null,
-        tm ? asNonNegativeInt(tm.totalActiveTimeMs) : null,
-        tm ? asNonNegativeInt(tm.longestContinuousMs) : null,
-        tm ? asNonNegativeInt(tm.maxConcurrentSessions) : null,
-        tm ? asNonNegativeInt(tm.sessionCount) : null,
-        mcpServers && mcpServers.length > 0 ? JSON.stringify(mcpServers) : null
-      )
+    ).bind(
+      deviceId,
+      deviceName,
+      now,
+      payload.meta?.version ?? null,
+      tm ? asNonNegativeInt(tm.totalActiveTimeMs) : null,
+      tm ? asNonNegativeInt(tm.longestContinuousMs) : null,
+      tm ? asNonNegativeInt(tm.maxConcurrentSessions) : null,
+      tm ? asNonNegativeInt(tm.sessionCount) : null,
+      mcpServers && mcpServers.length > 0 ? JSON.stringify(mcpServers) : null
+    )
   );
 
   // Audit row.
   const dates = contributions.map((d) => d.date).sort();
   statements.push(
-    env.TOKENS_DB
-      .prepare(
-        `INSERT INTO submissions
+    env.TOKENS_DB.prepare(
+      `INSERT INTO submissions
            (id, device_id, received_at, date_start, date_end, total_tokens,
             total_cost, row_count, changed_days, cli_version, generated_at,
             mode)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .bind(
-        submissionId,
-        deviceId,
-        now,
-        dates[0],
-        dates[dates.length - 1],
-        asNonNegativeInt(payload.summary?.totalTokens),
-        asNonNegativeNumber(payload.summary?.totalCost),
-        insertedRows,
-        changedDays.size,
-        payload.meta?.version ?? null,
-        payload.meta?.generatedAt ?? null,
-        mode
-      )
+    ).bind(
+      submissionId,
+      deviceId,
+      now,
+      dates[0],
+      dates[dates.length - 1],
+      asNonNegativeInt(payload.summary?.totalTokens),
+      asNonNegativeNumber(payload.summary?.totalCost),
+      insertedRows,
+      changedDays.size,
+      payload.meta?.version ?? null,
+      payload.meta?.generatedAt ?? null,
+      mode
+    )
   );
   // Retention, in the same transaction as the row it balances. The audit
   // log answers "did the last report land, and how often do they come" —
@@ -359,9 +362,9 @@ function planStatements(
   // dominated the daily R2 export, which copies whatever it finds *every
   // day* — quadratic storage growth for a log nobody reads past a week.
   statements.push(
-    env.TOKENS_DB
-      .prepare(`DELETE FROM submissions WHERE received_at < ?`)
-      .bind(now - AUDIT_RETENTION_DAYS * 86_400_000)
+    env.TOKENS_DB.prepare(`DELETE FROM submissions WHERE received_at < ?`).bind(
+      now - AUDIT_RETENTION_DAYS * 86_400_000
+    )
   );
 
   return statements;
@@ -399,7 +402,11 @@ async function accountMetrics(db: D1Database) {
   };
 }
 
-export async function handleSubmit(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+export async function handleSubmit(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
   if (!(await isAuthorized(request, env.TOKENS_API_TOKEN))) {
     return json({ error: "Invalid API token" }, 401);
   }
@@ -427,8 +434,7 @@ export async function handleSubmit(request: Request, env: Env, ctx: ExecutionCon
     payload,
     deviceId,
     deviceName:
-      payload.device?.name?.trim() ||
-      (deviceId === LEGACY_DEVICE_KEY ? LEGACY_DEVICE_NAME : null),
+      payload.device?.name?.trim() || (deviceId === LEGACY_DEVICE_KEY ? LEGACY_DEVICE_NAME : null),
     submissionId: crypto.randomUUID(),
     receivedAt: Date.now(),
   };
@@ -488,9 +494,9 @@ export async function handleDeleteSubmittedData(request: Request, env: Env): Pro
   if (!(await isAuthorized(request, env.TOKENS_API_TOKEN))) {
     return json({ error: "Invalid API token" }, 401);
   }
-  const count = await env.TOKENS_DB
-    .prepare(`SELECT count(*) AS n FROM submissions`)
-    .first<{ n: number }>();
+  const count = await env.TOKENS_DB.prepare(`SELECT count(*) AS n FROM submissions`).first<{
+    n: number;
+  }>();
   const n = count?.n ?? 0;
   await env.TOKENS_DB.batch([
     env.TOKENS_DB.prepare(`DELETE FROM daily_usage`),

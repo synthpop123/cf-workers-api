@@ -15,8 +15,7 @@ const page = (body: string, status = 200) =>
     headers: { "Content-Type": "text/html" },
   });
 
-const ld = (data: unknown) =>
-  `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+const ld = (data: unknown) => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
 
 const offer = (price: string, priceCurrency = "HKD", name = "Test Game") => ({
   "@type": "VideoGame",
@@ -30,9 +29,7 @@ const storefronts = (hk: Response, us: Response) => {
   return vi
     .spyOn(globalThis, "fetch")
     .mockImplementation((input) =>
-      Promise.resolve(
-        String(input).endsWith("/HK") ? answers[0].clone() : answers[1].clone()
-      )
+      Promise.resolve(String(input).endsWith("/HK") ? answers[0].clone() : answers[1].clone())
     );
 };
 
@@ -161,9 +158,13 @@ describe("resolveStoreFacts", () => {
 describe("store lookup budget", () => {
   it("caps each sync at twelve titles and four in-flight region requests", async () => {
     await env.SWITCH_DB.prepare("DELETE FROM games").run();
-    await env.SWITCH_DB.batch(Array.from({ length: 14 }, (_, i) => env.SWITCH_DB.prepare(
-      "INSERT INTO games (application_id, title, total_playing_time, first_seen, updated_at) VALUES (?, 'Game', 10, 1, 1)"
-    ).bind(`GAME${i}`)));
+    await env.SWITCH_DB.batch(
+      Array.from({ length: 14 }, (_, i) =>
+        env.SWITCH_DB.prepare(
+          "INSERT INTO games (application_id, title, total_playing_time, first_seen, updated_at) VALUES (?, 'Game', 10, 1, 1)"
+        ).bind(`GAME${i}`)
+      )
+    );
     let active = 0;
     let peak = 0;
     const fetched = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
@@ -176,6 +177,10 @@ describe("store lookup budget", () => {
     expect(await resolveStoreFacts(env, Date.now())).toBe(0);
     expect(fetched).toHaveBeenCalledTimes(24);
     expect(peak).toBe(4);
-    expect(await env.SWITCH_DB.prepare("SELECT COUNT(*) AS count FROM games WHERE store_checked_at IS NOT NULL").first()).toEqual({ count: 12 });
+    expect(
+      await env.SWITCH_DB.prepare(
+        "SELECT COUNT(*) AS count FROM games WHERE store_checked_at IS NOT NULL"
+      ).first()
+    ).toEqual({ count: 12 });
   });
 });

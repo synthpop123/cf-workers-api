@@ -21,7 +21,10 @@ describe("auth boundaries", () => {
     ],
     ["GET /tokens/api/auth/token", () => call("/tokens/api/auth/token")],
     ["POST /tokens/quota/codex", () => call("/tokens/quota/codex", { method: "POST", body: "{}" })],
-    ["POST /tokens/quota/claude", () => call("/tokens/quota/claude", { method: "POST", body: "{}" })],
+    [
+      "POST /tokens/quota/claude",
+      () => call("/tokens/quota/claude", { method: "POST", body: "{}" }),
+    ],
   ])("%s rejects missing tokens", async (_name, request) => {
     const response = await request();
     expect(response.status).toBe(401);
@@ -75,13 +78,19 @@ describe("submit flow", () => {
     ).all();
     expect(rows.results).toEqual([
       expect.objectContaining({
-        date: "2026-07-18", client: "cursor", model: "claude-opus-4-5",
-        provider: "anthropic", input: 400, parser_revision: 3,
+        date: "2026-07-18",
+        client: "cursor",
+        model: "claude-opus-4-5",
+        provider: "anthropic",
+        input: 400,
+        parser_revision: 3,
       }),
       expect.objectContaining({ date: "2026-07-19", client: "claude", input: 200 }),
     ]);
     expect((rows.results[0] as { cost: number }).cost).toBeCloseTo(0.2);
-    const activity = await env.TOKENS_DB.prepare(`SELECT date, active_time_ms FROM daily_activity`).all();
+    const activity = await env.TOKENS_DB.prepare(
+      `SELECT date, active_time_ms FROM daily_activity`
+    ).all();
     expect(activity.results).toEqual([{ date: "2026-07-18", active_time_ms: 3_600_000 }]);
 
     // R2: raw payload archived, daily backup exported.
@@ -122,12 +131,15 @@ describe("submit flow", () => {
       .bind(DEVICE_ID, ancient)
       .run();
     expect(
-      (await env.TOKENS_DB.prepare(`SELECT count(*) AS n FROM submissions`).first<{ n: number }>())?.n
+      (await env.TOKENS_DB.prepare(`SELECT count(*) AS n FROM submissions`).first<{ n: number }>())
+        ?.n
     ).toBe(2);
 
     await submit();
 
-    const remaining = await env.TOKENS_DB.prepare(`SELECT id FROM submissions`).all<{ id: string }>();
+    const remaining = await env.TOKENS_DB.prepare(`SELECT id FROM submissions`).all<{
+      id: string;
+    }>();
     expect(remaining.results.map((row) => row.id)).not.toContain("ancient");
   });
 

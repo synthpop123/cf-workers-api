@@ -34,7 +34,6 @@
  * final vendor ids) — a new proxy or gateway needs no entry at all.
  */
 
-
 const EFFORT = "minimal|low|medium|high|xhigh|max";
 
 /** Tried in order, repeatedly, until the name stops changing. */
@@ -159,8 +158,7 @@ export function inferProviderFromModel(model: string): string | null {
   if (m.includes("deepseek")) return "deepseek";
   if (m.includes("minimax")) return "minimax";
   if (m.includes("mistral") || m.includes("mixtral")) return "mistral";
-  if (m.includes("llama") || containsDelimited(m, "meta") || m.includes("muse"))
-    return "meta";
+  if (m.includes("llama") || containsDelimited(m, "meta") || m.includes("muse")) return "meta";
   // OpenCode Go anonymous OpenRouter routes (Ox Alpha, ...).
   if (m === "ox-alpha" || /^ox-[a-z0-9-]+$/.test(m)) return "openrouter";
   if (m.includes("qwen")) return "alibaba";

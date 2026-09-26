@@ -58,18 +58,14 @@ describe("denseActivity", () => {
   });
 
   it("drops days outside the window and returns nothing when empty", () => {
-    expect(
-      denseActivity([{ date: "2020-01-01", playing_time: 60 }], "2026-08-29", 365)
-    ).toEqual([]);
+    expect(denseActivity([{ date: "2020-01-01", playing_time: 60 }], "2026-08-29", 365)).toEqual(
+      []
+    );
     expect(denseActivity([], "2026-08-29", 365)).toEqual([]);
   });
 
   it("passes znma minutes through without scaling", () => {
-    const [day] = denseActivity(
-      [{ date: "2026-08-29", playing_time: 65 }],
-      "2026-08-29",
-      365
-    );
+    const [day] = denseActivity([{ date: "2026-08-29", playing_time: 65 }], "2026-08-29", 365);
     expect(day.minutes).toBe(65);
   });
 });

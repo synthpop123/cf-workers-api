@@ -40,9 +40,10 @@ const ENTITIES: Record<string, string> = {
 export function decodeXml(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, name: string) => {
     if (name[0] === "#") {
-      const code = name[1] === "x" || name[1] === "X"
-        ? Number.parseInt(name.slice(2), 16)
-        : Number.parseInt(name.slice(1), 10);
+      const code =
+        name[1] === "x" || name[1] === "X"
+          ? Number.parseInt(name.slice(2), 16)
+          : Number.parseInt(name.slice(1), 10);
       return Number.isFinite(code) ? String.fromCodePoint(code) : match;
     }
     return ENTITIES[name.toLowerCase()] ?? match;

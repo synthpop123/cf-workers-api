@@ -54,13 +54,8 @@ interface CatalogRow {
 export async function composeSiteBody(env: Env, today = isoToday()): Promise<Site> {
   const recentFloor = shiftDays(today, -(RECENT_DAYS - 1));
 
-  const [
-    activityResult,
-    catalogResult,
-    recentResult,
-    observedResult,
-    rateResult,
-  ] = await env.SWITCH_DB.batch([
+  const [activityResult, catalogResult, recentResult, observedResult, rateResult] =
+    await env.SWITCH_DB.batch([
       env.SWITCH_DB.prepare(
         // Time in games, not console time: `daily_summaries.playing_time`
         // also counts the HOME menu, the eShop and settings, so a total
@@ -97,9 +92,10 @@ export async function composeSiteBody(env: Env, today = isoToday()): Promise<Sit
   );
 
   const recent = new Map(
-    (recentResult.results as { application_id: string; playing_time: number }[]).map(
-      (row) => [row.application_id, row.playing_time]
-    )
+    (recentResult.results as { application_id: string; playing_time: number }[]).map((row) => [
+      row.application_id,
+      row.playing_time,
+    ])
   );
 
   const library = buildLibrary(
@@ -114,8 +110,7 @@ export async function composeSiteBody(env: Env, today = isoToday()): Promise<Sit
   );
 
   const observedAt =
-    (observedResult.results[0] as { observed_at: number | null } | undefined)
-      ?.observed_at ?? null;
+    (observedResult.results[0] as { observed_at: number | null } | undefined)?.observed_at ?? null;
 
   return {
     schemaVersion: SITE_VERSION,

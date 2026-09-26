@@ -22,7 +22,10 @@ const listen = (id: number, time: string) => ({
   track: {
     id,
     title: `Track ${id}`,
-    artists: [{ id: 1, name: "Aluna" }, { id: 2, name: "Riordan" }],
+    artists: [
+      { id: 1, name: "Aluna" },
+      { id: 2, name: "Riordan" },
+    ],
     image: {
       xs: `/image/${id}/64x64.webp`,
       small: `/image/${id}/128x128.webp`,

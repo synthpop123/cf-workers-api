@@ -18,14 +18,15 @@ export const moviesSite: Snapshot = {
     // A rewatch shares its poster; copy each one once.
     const sources = [...new Set(films.flatMap((film) => (film.poster ? [film.poster] : [])))];
     const mirrored = new Map(
-      await Promise.all(
-        sources.map(async (url) => [url, await mirrorPoster(env, url)] as const)
-      )
+      await Promise.all(sources.map(async (url) => [url, await mirrorPoster(env, url)] as const))
     );
     return JSON.stringify(
       composeSite(
         env.LETTERBOXD_USER,
-        films.map((film) => ({ ...film, poster: film.poster && (mirrored.get(film.poster) ?? null) }))
+        films.map((film) => ({
+          ...film,
+          poster: film.poster && (mirrored.get(film.poster) ?? null),
+        }))
       )
     );
   },

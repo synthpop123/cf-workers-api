@@ -115,9 +115,7 @@ const minutesOf = (flight: AirTrailFlight): number | null =>
     : null;
 
 /** Tally by name, most first; ties in name order so the output is stable. */
-function tally(
-  items: ({ name: string; code: string | null } | null)[]
-): SiteCount[] {
+function tally(items: ({ name: string; code: string | null } | null)[]): SiteCount[] {
   const counts = new Map<string, SiteCount>();
   for (const item of items) {
     const name = item?.name.trim();
@@ -126,9 +124,7 @@ function tally(
     entry.flights += 1;
     counts.set(name, entry);
   }
-  return [...counts.values()].sort(
-    (a, b) => b.flights - a.flights || a.name.localeCompare(b.name)
-  );
+  return [...counts.values()].sort((a, b) => b.flights - a.flights || a.name.localeCompare(b.name));
 }
 
 export function composeSite(upstream: AirTrailFlight[], today: string): Site {

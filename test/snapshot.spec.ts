@@ -25,8 +25,7 @@ function fake(initial: string) {
   return { snapshot, state };
 }
 
-const meta = async (key: string) =>
-  (await env.CACHE.getWithMetadata<SnapshotMeta>(key)).metadata;
+const meta = async (key: string) => (await env.CACHE.getWithMetadata<SnapshotMeta>(key)).metadata;
 
 beforeEach(async () => {
   await env.CACHE.delete("test:site");

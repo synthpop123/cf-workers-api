@@ -5,7 +5,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { canonicalModel, canonicalProvider, inferProviderFromModel } from "../../src/services/tokens/models";
+import {
+  canonicalModel,
+  canonicalProvider,
+  inferProviderFromModel,
+} from "../../src/services/tokens/models";
 
 describe("canonicalModel", () => {
   it("strips effort/thinking/serving-tier suffixes, repeatedly", () => {

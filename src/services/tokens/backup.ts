@@ -90,7 +90,8 @@ export async function ensureDailyBackup(env: Env): Promise<void> {
       exportedAt: new Date().toISOString(),
       // The last migration D1 recorded — the schema the rows below are in,
       // read from the database rather than from a constant to keep in step.
-      schema: (migration.results[0] as { name: string } | undefined)?.name.replace(/\.sql$/, "") ?? null,
+      schema:
+        (migration.results[0] as { name: string } | undefined)?.name.replace(/\.sql$/, "") ?? null,
       daily_usage: usage.results,
       daily_activity: activity.results,
       devices: devices.results,

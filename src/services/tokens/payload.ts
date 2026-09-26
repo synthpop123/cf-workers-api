@@ -170,7 +170,12 @@ export function normalizePayload(raw: unknown): void {
   }
 }
 
-function exceedsTolerance(actual: number, expected: number, relTol: number, absTol: number): boolean {
+function exceedsTolerance(
+  actual: number,
+  expected: number,
+  relTol: number,
+  absTol: number
+): boolean {
   const diff = Math.abs(actual - expected);
   return diff > Math.abs(expected) * relTol && diff > absTol;
 }
@@ -218,8 +223,15 @@ export function validatePayload(payload: SubmissionPayload): ValidationResult {
 
   const seenDates = new Set<string>();
   for (const day of payload.contributions) {
-    if (!day || typeof day !== "object" || typeof day.date !== "string" || !DATE_RE.test(day.date)) {
-      errors.push(`Invalid contribution date: ${JSON.stringify((day as DailyContribution | null)?.date)}`);
+    if (
+      !day ||
+      typeof day !== "object" ||
+      typeof day.date !== "string" ||
+      !DATE_RE.test(day.date)
+    ) {
+      errors.push(
+        `Invalid contribution date: ${JSON.stringify((day as DailyContribution | null)?.date)}`
+      );
       continue;
     }
     if (seenDates.has(day.date)) errors.push(`Duplicate date found: ${day.date}`);
@@ -315,9 +327,7 @@ export function validatePayload(payload: SubmissionPayload): ValidationResult {
     const tokenDiff = Math.abs(calcTokens - summary.totalTokens);
     const costDiff = Math.abs(calcCost - summary.totalCost);
     if (tokenDiff > summary.totalTokens * TOKEN_REL_TOL && tokenDiff > TOKEN_ABS_TOL) {
-      errors.push(
-        `Token total mismatch: summary=${summary.totalTokens}, calculated=${calcTokens}`
-      );
+      errors.push(`Token total mismatch: summary=${summary.totalTokens}, calculated=${calcTokens}`);
     }
     if (costDiff > summary.totalCost * COST_REL_TOL && costDiff > COST_ABS_TOL) {
       errors.push(

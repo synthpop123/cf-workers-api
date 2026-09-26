@@ -53,9 +53,7 @@ const routes: Route[] = [
   // Reported by the quota collectors (quota.ts). One route per
   // subscription, derived from the provider table so an unknown one 404s
   // here rather than inside the handler.
-  ...[...QUOTA_PROVIDERS.keys()].map(
-    (id): Route => [`POST /tokens/quota/${id}`, handleQuota]
-  ),
+  ...[...QUOTA_PROVIDERS.keys()].map((id): Route => [`POST /tokens/quota/${id}`, handleQuota]),
 ];
 
 export default { name: "tokens", site: tokensSite, routes } satisfies Service;

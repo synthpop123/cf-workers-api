@@ -155,13 +155,9 @@ export function buildLibrary(
         recentMinutes: recent.get(row.application_id) ?? 0,
         lastPlayedDate: row.last_played_date,
       }))
-      .sort(
-        (a, b) => b.totalMinutes - a.totalMinutes || a.title.localeCompare(b.title)
-      ),
+      .sort((a, b) => b.totalMinutes - a.totalMinutes || a.title.localeCompare(b.title)),
     valueCny:
-      priced.length > 0 && rateToCny !== null
-        ? Math.round((cents / 100) * rateToCny)
-        : null,
+      priced.length > 0 && rateToCny !== null ? Math.round((cents / 100) * rateToCny) : null,
     pricedCount: priced.length,
   };
 }

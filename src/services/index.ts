@@ -11,6 +11,12 @@ import music from "./music";
 import switchPlay from "./switch";
 import tokens from "./tokens";
 
-export const SERVICES = [tokens, switchPlay, flights, music, movies] as const satisfies readonly Service[];
+export const SERVICES = [
+  tokens,
+  switchPlay,
+  flights,
+  music,
+  movies,
+] as const satisfies readonly Service[];
 
 export { flights, movies, music, switchPlay, tokens };

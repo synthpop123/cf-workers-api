@@ -274,7 +274,9 @@ const narrowClaude: Narrow = (body) => {
  * dashboard reuses its brand marks), and `label` is what the
  * subscription calls itself — "Codex" is a plan, not a vendor.
  */
-export const QUOTA_PROVIDERS = new Map<string, { provider: string; label: string; narrow: Narrow }>([
-  ["codex", { provider: "openai", label: "Codex", narrow: narrowCodex }],
-  ["claude", { provider: "anthropic", label: "Claude", narrow: narrowClaude }],
-]);
+export const QUOTA_PROVIDERS = new Map<string, { provider: string; label: string; narrow: Narrow }>(
+  [
+    ["codex", { provider: "openai", label: "Codex", narrow: narrowCodex }],
+    ["claude", { provider: "anthropic", label: "Claude", narrow: narrowClaude }],
+  ]
+);

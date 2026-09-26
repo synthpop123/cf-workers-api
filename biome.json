@@ -3,7 +3,9 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": { "ignoreUnknown": true, "includes": ["**", "!public/index.html"] },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
-  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "es5" } },
+  "javascript": {
+    "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "es5" }
+  },
   "linter": { "enabled": false },
   "assist": { "enabled": false }
 }

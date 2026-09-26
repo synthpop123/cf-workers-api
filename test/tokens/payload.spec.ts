@@ -26,12 +26,24 @@ const clientRow = (input: number, cost: number, overrides: Record<string, unknow
 });
 
 const validPayload = (): SubmissionPayload => ({
-  meta: { generatedAt: "2026-07-20T00:00:00Z", version: "3.0.0", dateRange: { start: "2026-07-18", end: "2026-07-19" } },
+  meta: {
+    generatedAt: "2026-07-20T00:00:00Z",
+    version: "3.0.0",
+    dateRange: { start: "2026-07-18", end: "2026-07-19" },
+  },
   device: { id: "device-1", name: "Test" },
   summary: { totalTokens: 300, totalCost: 0.3, activeDays: 2, clients: ["cursor"] },
   contributions: [
-    { date: "2026-07-18", totals: { tokens: 100, cost: 0.1, messages: 1 }, clients: [clientRow(100, 0.1)] },
-    { date: "2026-07-19", totals: { tokens: 200, cost: 0.2, messages: 1 }, clients: [clientRow(200, 0.2)] },
+    {
+      date: "2026-07-18",
+      totals: { tokens: 100, cost: 0.1, messages: 1 },
+      clients: [clientRow(100, 0.1)],
+    },
+    {
+      date: "2026-07-19",
+      totals: { tokens: 200, cost: 0.2, messages: 1 },
+      clients: [clientRow(200, 0.2)],
+    },
   ],
 });
 
@@ -92,9 +104,21 @@ describe("validatePayload", () => {
     const future = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     payload.contributions = [
       { date: "07/18/2026", totals: { tokens: 0, cost: 0, messages: 0 }, clients: [] },
-      { date: "2026-07-18", totals: { tokens: 100, cost: 0.1, messages: 1 }, clients: [clientRow(100, 0.1)] },
-      { date: "2026-07-18", totals: { tokens: 100, cost: 0.1, messages: 1 }, clients: [clientRow(100, 0.1)] },
-      { date: future, totals: { tokens: 100, cost: 0.1, messages: 1 }, clients: [clientRow(100, 0.1)] },
+      {
+        date: "2026-07-18",
+        totals: { tokens: 100, cost: 0.1, messages: 1 },
+        clients: [clientRow(100, 0.1)],
+      },
+      {
+        date: "2026-07-18",
+        totals: { tokens: 100, cost: 0.1, messages: 1 },
+        clients: [clientRow(100, 0.1)],
+      },
+      {
+        date: future,
+        totals: { tokens: 100, cost: 0.1, messages: 1 },
+        clients: [clientRow(100, 0.1)],
+      },
     ];
     payload.summary = undefined;
     payload.meta = undefined;
@@ -115,10 +139,16 @@ describe("validatePayload", () => {
   it("flags cost submitted without tokens, honoring the Cursor carve-out", () => {
     const bare = validPayload();
     bare.contributions = [
-      { date: "2026-07-18", totals: { tokens: 0, cost: 1, messages: 1 }, clients: [clientRow(0, 1)] },
+      {
+        date: "2026-07-18",
+        totals: { tokens: 0, cost: 1, messages: 1 },
+        clients: [clientRow(0, 1)],
+      },
     ];
     bare.summary = undefined;
-    expect(validatePayload(bare).errors.some((e) => e.includes("Cost submitted without tokens"))).toBe(true);
+    expect(
+      validatePayload(bare).errors.some((e) => e.includes("Cost submitted without tokens"))
+    ).toBe(true);
 
     const carveOut = validPayload();
     carveOut.contributions = [
@@ -135,7 +165,9 @@ describe("validatePayload", () => {
   it("checks summary totals and warns on active-day mismatches", () => {
     const tokensOff = validPayload();
     tokensOff.summary!.totalTokens = 100000;
-    expect(validatePayload(tokensOff).errors.some((e) => e.includes("Token total mismatch"))).toBe(true);
+    expect(validatePayload(tokensOff).errors.some((e) => e.includes("Token total mismatch"))).toBe(
+      true
+    );
 
     const activeOff = validPayload();
     activeOff.summary!.activeDays = 7;
@@ -175,14 +207,24 @@ describe("validatePayload", () => {
 
     const badVersion = validPayload();
     badVersion.clientManifest = { schemaVersion: 2, clients: [] };
-    expect(validatePayload(badVersion).warnings.some((w) => w.includes("unsupported schemaVersion"))).toBe(true);
+    expect(
+      validatePayload(badVersion).warnings.some((w) => w.includes("unsupported schemaVersion"))
+    ).toBe(true);
     expect(badVersion.clientManifest).toBeUndefined();
 
     const badCoverage = validPayload();
     badCoverage.clientManifest = {
       schemaVersion: 1,
-      clients: [{ client: "cursor", parserRevision: 3, coverage: { mode: "full", start: "2026-07-20", end: "2026-07-01" } }],
+      clients: [
+        {
+          client: "cursor",
+          parserRevision: 3,
+          coverage: { mode: "full", start: "2026-07-20", end: "2026-07-01" },
+        },
+      ],
     };
-    expect(validatePayload(badCoverage).errors.some((e) => e.includes("coverage for cursor is invalid"))).toBe(true);
+    expect(
+      validatePayload(badCoverage).errors.some((e) => e.includes("coverage for cursor is invalid"))
+    ).toBe(true);
   });
 });

@@ -115,7 +115,6 @@ describe("composeSiteBody", () => {
     // Outside the recent window, so the lifetime total stands alone.
     expect(site.games[1]).toMatchObject({ totalMinutes: 40, recentMinutes: 0 });
 
-
     expect(site.observedAt).toBe(new Date(1787980089000).toISOString());
   });
 
@@ -128,9 +127,11 @@ describe("composeSiteBody", () => {
   });
 });
 
-
 describe("GET /switch/site", () => {
-  beforeEach(async () => { await clear(); await env.CACHE.delete(switchSite.key); });
+  beforeEach(async () => {
+    await clear();
+    await env.CACHE.delete(switchSite.key);
+  });
   afterEach(() => vi.useRealTimers());
 
   const read = (etag?: string) =>
@@ -165,7 +166,9 @@ describe("GET /switch/site", () => {
     const nextDay = await read(changedTag);
     expect(nextDay.status).toBe(200);
     expect((await nextDay.json<{ today: string }>()).today).toBe("2026-09-07");
-    const cached = await env.CACHE.getWithMetadata<{ day: string }>(switchSite.key, { type: "text" });
+    const cached = await env.CACHE.getWithMetadata<{ day: string }>(switchSite.key, {
+      type: "text",
+    });
     expect(cached.metadata?.day).toBe("2026-09-07");
   });
 });

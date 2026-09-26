@@ -57,8 +57,9 @@ const asArray = <T>(value: T | T[] | undefined): T[] =>
 /** Every product node in a JSON-LD document, `@graph` or bare. */
 function products(data: unknown): LinkedProduct[] {
   if (typeof data !== "object" || data === null) return [];
-  const graph = ((data as { "@graph"?: unknown })["@graph"] ??
-    data) as LinkedProduct | LinkedProduct[];
+  const graph = ((data as { "@graph"?: unknown })["@graph"] ?? data) as
+    | LinkedProduct
+    | LinkedProduct[];
   return asArray(graph).filter(
     (node): node is LinkedProduct => typeof node === "object" && node !== null
   );
@@ -142,10 +143,7 @@ export function fetchStoreFacts(applicationId: string): Promise<StoreFacts> {
 }
 
 /** Refresh the HKD→CNY reference rate. Returns it, or null if unavailable. */
-export async function refreshExchangeRate(
-  env: Env,
-  now: number
-): Promise<number | null> {
+export async function refreshExchangeRate(env: Env, now: number): Promise<number | null> {
   try {
     const response = await fetch(RATE_URL);
     if (!response.ok) return null;
@@ -190,10 +188,12 @@ export async function resolveStoreFacts(env: Env, now: number): Promise<number> 
   let priced = 0;
   for (let start = 0; start < results.length; start += LOOKUP_CONCURRENCY) {
     const batch = results.slice(start, start + LOOKUP_CONCURRENCY);
-    const resolved = await Promise.all(batch.map(async ({ application_id }) => ({
-      application_id,
-      facts: await fetchStoreFacts(application_id),
-    })));
+    const resolved = await Promise.all(
+      batch.map(async ({ application_id }) => ({
+        application_id,
+        facts: await fetchStoreFacts(application_id),
+      }))
+    );
     for (const { application_id, facts } of resolved) {
       if (facts.priceCents !== null) priced += 1;
       statements.push(

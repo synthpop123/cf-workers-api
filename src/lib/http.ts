@@ -58,10 +58,7 @@ export function json(
  * hashed to fixed-length digests (so length never leaks) and compared with
  * the runtime's timing-safe primitive. An unset secret rejects everything.
  */
-export async function isAuthorized(
-  request: Request,
-  secret: string | undefined
-): Promise<boolean> {
+export async function isAuthorized(request: Request, secret: string | undefined): Promise<boolean> {
   const match = (request.headers.get("Authorization") ?? "").match(/^Bearer\s+(.+)$/);
   if (!match || !secret) return false;
   const enc = new TextEncoder();
@@ -91,8 +88,5 @@ export async function etagOf(text: string): Promise<string> {
  */
 export function etagMatches(request: Request, etag: string): boolean {
   const inm = request.headers.get("If-None-Match");
-  return (
-    inm !== null &&
-    inm.split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag)
-  );
+  return inm !== null && inm.split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag);
 }
