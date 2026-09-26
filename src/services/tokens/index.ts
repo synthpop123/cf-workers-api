@@ -39,13 +39,13 @@
  */
 
 import type { Route } from "../../lib/router";
-import { siteHandler } from "../../lib/snapshot";
+import type { Service } from "../../lib/service";
 import { handleQuota } from "./quota";
 import { QUOTA_PROVIDERS } from "./quota-registry";
 import { tokensSite } from "./site";
 import { handleAuthToken, handleDeleteSubmittedData, handleSubmit } from "./submit";
 
-export const tokensRoutes: Route[] = [
+const routes: Route[] = [
   // CLI-facing (bearer token; see submit.ts).
   ["POST /tokens/api/submit", handleSubmit],
   ["DELETE /tokens/api/settings/submitted-data", handleDeleteSubmittedData],
@@ -56,5 +56,6 @@ export const tokensRoutes: Route[] = [
   ...[...QUOTA_PROVIDERS.keys()].map(
     (id): Route => [`POST /tokens/quota/${id}`, handleQuota]
   ),
-  ["GET /tokens/site", siteHandler(tokensSite)],
 ];
+
+export default { name: "tokens", site: tokensSite, routes } satisfies Service;

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { coverSource, mirrorCover, publicUrl } from "../../src/services/switch/images";
+import { publicUrl } from "../../src/lib/images";
+import { coverSource, mirrorCover } from "../../src/services/switch/images";
 
 const HASH = "f17751dcb0b347249d0aaf783edf1ea5";
 const CDN = "https://atum-img-lp1.cdn.nintendo.net";

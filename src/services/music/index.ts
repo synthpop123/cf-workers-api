@@ -8,8 +8,8 @@
  * here, because the page marks a listen under ten minutes old as playing.
  */
 
-import type { Route } from "../../lib/router";
-import { siteHandler, type Snapshot } from "../../lib/snapshot";
+import type { Service } from "../../lib/service";
+import type { Snapshot } from "../../lib/snapshot";
 import { ACTIVITY_DAYS, composeSite, LISTENS, SITE_VERSION } from "./compose";
 import { fetchKoito } from "./koito";
 
@@ -22,4 +22,4 @@ export const musicSite: Snapshot = {
     ),
 };
 
-export const musicRoutes: Route[] = [["GET /music/site", siteHandler(musicSite)]];
+export default { name: "music", site: musicSite } satisfies Service;

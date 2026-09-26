@@ -11,7 +11,7 @@
 import type { Env } from "../../env";
 import { isAuthorized, json } from "../../lib/http";
 import type { Route } from "../../lib/router";
-import { siteHandler } from "../../lib/snapshot";
+import type { Service } from "../../lib/service";
 import { switchSite } from "./site";
 import { runSync } from "./sync";
 
@@ -27,9 +27,8 @@ async function handleSync(request: Request, env: Env): Promise<Response> {
   }
 }
 
-export const switchRoutes: Route[] = [
-  ["GET /switch/site", siteHandler(switchSite)],
-  ["POST /switch/sync", handleSync],
-];
+const routes: Route[] = [["POST /switch/sync", handleSync]];
+
+export default { name: "switch", site: switchSite, routes } satisfies Service;
 
 export { runSync };

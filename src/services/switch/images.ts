@@ -11,7 +11,7 @@
  */
 
 import type { Env } from "../../env";
-import { mirrorImage, publicUrl } from "../../lib/images";
+import { mirrorImage } from "../../lib/images";
 import type { ImageUri } from "./moon/types";
 
 const PREFIX = "switch";
@@ -50,5 +50,3 @@ export function coverSource(uri: ImageUri | undefined | null): string | null {
     uri[COVER_SIZE] ?? uri.small ?? uri.large ?? uri.extraLarge ?? uri.extraSmall ?? null
   );
 }
-
-export { publicUrl };

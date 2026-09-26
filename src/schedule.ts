@@ -30,9 +30,7 @@
 import type { Env } from "./env";
 import { TIME_ZONE } from "./lib/http";
 import { refresh, type Snapshot } from "./lib/snapshot";
-import { flightsSite } from "./services/flights";
-import { moviesSite } from "./services/movies";
-import { musicSite } from "./services/music";
+import { flights, movies, music } from "./services";
 import { runSync } from "./services/switch";
 
 /** Minutes between runs, counted from midnight; or a daily `HH:MM`. Both
@@ -55,9 +53,9 @@ export const TRIGGERS = new Map<string, Job[]>([
   [
     "*/5 * * * *",
     [
-      refreshing(musicSite, { every: 5 }),
-      refreshing(moviesSite, { every: 30 }),
-      refreshing(flightsSite, { at: "00:00" }),
+      refreshing(music.site, { every: 5 }),
+      refreshing(movies.site, { every: 30 }),
+      refreshing(flights.site, { at: "00:00" }),
     ],
   ],
   ["0 1 * * *", [{ name: "switch sync", run: runSync }]],

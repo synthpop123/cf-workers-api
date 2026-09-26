@@ -13,7 +13,7 @@
 import type { Env } from "../../env";
 import { isoToday } from "../../lib/http";
 import { refresh, type Snapshot } from "../../lib/snapshot";
-import { publicUrl } from "./images";
+import { publicUrl } from "../../lib/images";
 import {
   buildLibrary,
   computeStats,

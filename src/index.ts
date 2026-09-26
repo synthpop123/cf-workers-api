@@ -11,34 +11,26 @@
  *   /misc        the four /misc snapshots in one response
  *   /health      liveness
  *
- * Each service lives in src/services/<name>/ and exports its routes;
- * everything they share — the router, the snapshot store every public
- * view is served from, the image mirror, the HTTP vocabulary — is in
- * src/lib/. `/` is the service page (public/index.html), served by Workers
+ * Each service lives in src/services/<name>/ and default-exports a
+ * `Service` (lib/service.ts): its name, which is also its path prefix, its
+ * public view and its other routes. Everything they share — the router,
+ * the snapshot store every view is served from, the image mirror, the HTTP
+ * vocabulary — is in src/lib/. `/` is the service page (public/index.html), served by Workers
  * Static Assets before this router runs.
  */
 
 import type { Env } from "./env";
 import { json } from "./lib/http";
 import { createRouter } from "./lib/router";
+import { serviceRoutes } from "./lib/service";
 import { handleMisc } from "./misc";
 import { runScheduled } from "./schedule";
-import { flightsRoutes } from "./services/flights";
-import { moviesRoutes } from "./services/movies";
-import { musicRoutes } from "./services/music";
-import { switchRoutes } from "./services/switch";
-import { tokensRoutes } from "./services/tokens";
-
-const SERVICES = ["tokens", "switch", "flights", "music", "movies"] as const;
+import { SERVICES } from "./services";
 
 const router = createRouter([
-  ...tokensRoutes,
-  ...switchRoutes,
-  ...flightsRoutes,
-  ...musicRoutes,
-  ...moviesRoutes,
+  ...SERVICES.flatMap(serviceRoutes),
   ["GET /misc", handleMisc],
-  ["GET /health", () => json({ ok: true, services: SERVICES })],
+  ["GET /health", () => json({ ok: true, services: SERVICES.map(({ name }) => name) })],
 ]);
 
 export default {

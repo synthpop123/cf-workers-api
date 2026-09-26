@@ -10,8 +10,8 @@
  * snapshot's day guard covers.
  */
 
-import type { Route } from "../../lib/router";
-import { siteHandler, type Snapshot } from "../../lib/snapshot";
+import type { Service } from "../../lib/service";
+import type { Snapshot } from "../../lib/snapshot";
 import { fetchFlights } from "./airtrail";
 import { composeSite, SITE_VERSION } from "./compose";
 
@@ -21,4 +21,4 @@ export const flightsSite: Snapshot = {
   compose: async (env, today) => JSON.stringify(composeSite(await fetchFlights(env), today)),
 };
 
-export const flightsRoutes: Route[] = [["GET /flights/site", siteHandler(flightsSite)]];
+export default { name: "flights", site: flightsSite } satisfies Service;

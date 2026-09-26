@@ -4,8 +4,8 @@
  * poster wall on lkwplus.com/misc. Refreshed by the heartbeat (index.ts).
  */
 
-import type { Route } from "../../lib/router";
-import { siteHandler, type Snapshot } from "../../lib/snapshot";
+import type { Service } from "../../lib/service";
+import type { Snapshot } from "../../lib/snapshot";
 import { composeSite, latest, SITE_VERSION } from "./compose";
 import { fetchDiary } from "./letterboxd";
 import { mirrorPoster } from "./posters";
@@ -31,4 +31,4 @@ export const moviesSite: Snapshot = {
   },
 };
 
-export const moviesRoutes: Route[] = [["GET /movies/site", siteHandler(moviesSite)]];
+export default { name: "movies", site: moviesSite } satisfies Service;

@@ -19,22 +19,15 @@
 
 import type { Env } from "./env";
 import { etagMatches, etagOf } from "./lib/http";
-import { load, type Snapshot } from "./lib/snapshot";
-import { flightsSite } from "./services/flights";
-import { moviesSite } from "./services/movies";
-import { musicSite } from "./services/music";
-import { switchSite } from "./services/switch/site";
+import { load } from "./lib/snapshot";
+import { flights, movies, music, switchPlay } from "./services";
 
-const SECTIONS: [name: string, snapshot: Snapshot][] = [
-  ["flights", flightsSite],
-  ["movies", moviesSite],
-  ["music", musicSite],
-  ["switch", switchSite],
-];
+/** The sections, keyed in the bundle by service name. */
+const SECTIONS = [flights, movies, music, switchPlay];
 
 export async function handleMisc(request: Request, env: Env): Promise<Response> {
-  const stored = await Promise.all(SECTIONS.map(([, snapshot]) => load(env, snapshot)));
-  const text = `{${SECTIONS.map(([name], i) => `"${name}":${stored[i]?.text ?? "null"}`).join(",")}}`;
+  const stored = await Promise.all(SECTIONS.map(({ site }) => load(env, site)));
+  const text = `{${SECTIONS.map(({ name }, i) => `"${name}":${stored[i]?.text ?? "null"}`).join(",")}}`;
   const etag = await etagOf(stored.map((entry) => entry?.meta.etag ?? "-").join(","));
   const changedAt = Math.max(0, ...stored.map((entry) => entry?.meta.changedAt ?? 0));
 
