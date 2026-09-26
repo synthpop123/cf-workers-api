@@ -20,12 +20,20 @@ describe("routing", () => {
     expect(response.status).toBe(status);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(response.headers.get("Access-Control-Expose-Headers")).toContain("ETag");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
+  it("answers HEAD for a GET route with the headers and no body", async () => {
+    const response = await call("/health", { method: "HEAD" });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/json");
+    expect(await response.text()).toBe("");
   });
 
   it("names the methods a known path takes", async () => {
     const response = await call("/flights/site", { method: "POST" });
     expect(response.status).toBe(405);
-    expect(response.headers.get("Allow")).toBe("GET");
+    expect(response.headers.get("Allow")).toBe("GET, HEAD");
   });
 
   it("lists the services on /health", async () => {

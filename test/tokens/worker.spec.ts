@@ -193,7 +193,7 @@ describe("submit flow", () => {
     // Read endpoints too — a known path never answers a misleading 404.
     const read = await call("/tokens/site", { method: "POST" });
     expect(read.status).toBe(405);
-    expect(read.headers.get("Allow")).toBe("GET");
+    expect(read.headers.get("Allow")).toBe("GET, HEAD");
 
     expect((await call("/tokens/api/nope")).status).toBe(404);
   });
