@@ -3,14 +3,14 @@
  * the latest film, today's token usage and the newest memo, in one small
  * body instead of four feeds.
  *
- * Three of the four are already composed elsewhere, so this service
- * fetches nothing from them: it reads the stored music, movies and tokens
- * snapshots and keeps the one entry of each the home page shows. Only the
- * memo comes from outside (mastodon.ts). A source with nothing stored is
- * `null`, which blanks only that tile.
+ * All four are already composed elsewhere, so this service fetches
+ * nothing: it reads the stored music, movies, tokens and memos snapshots
+ * and keeps the one entry of each the home page shows, the memo reduced
+ * to one line of plain text. A source with nothing stored is `null`,
+ * which blanks only that tile.
  *
- * Refreshed by the heartbeat right after music (schedule.ts), so a new
- * listen reaches both views in the same run. A body that did not move
+ * Refreshed by the heartbeat right after music and memos (schedule.ts),
+ * so a new listen or memo reaches both views in the same run. A body that did not move
  * writes nothing, and the fields are few on purpose: it moves when a
  * track changes, a film is logged, a device reports tokens or a memo is
  * posted, never because some other part of those payloads did.
@@ -19,14 +19,28 @@
 import type { Env } from "../../env";
 import type { Service } from "../../lib/service";
 import { read, type Snapshot } from "../../lib/snapshot";
+import { memosSite } from "../memos";
+import type { Site as MemosSite } from "../memos/compose";
+import { plainText } from "../memos/mastodon";
 import type { Site as MoviesSite, SiteFilm } from "../movies/compose";
 import { moviesSite } from "../movies";
 import type { Site as MusicSite, SiteListen } from "../music/compose";
 import { musicSite } from "../music";
 import { tokensSite } from "../tokens/site";
-import { fetchLatestMemo, type Memo } from "./mastodon";
 
 export const SITE_VERSION = 1;
+
+export interface Memo {
+  /** ISO instant the status was posted. */
+  at: string;
+  url: string;
+  /** Plain text: the content warning when there is one, else the body. */
+  text: string;
+  /** True when `text` is a content warning standing in for the body. */
+  cw: boolean;
+  /** Attachments of any kind. */
+  media: number;
+}
 
 export interface TokensToday {
   tokens: number;
@@ -81,26 +95,29 @@ export function pickTokens(site: TokensSite | null, today: string): TokensToday 
     : { tokens: 0, cost: 0, messages: 0 };
 }
 
-/** The newest memo; when the instance is down, the one last stored. */
-async function latestMemo(env: Env): Promise<Memo | null> {
-  try {
-    return await fetchLatestMemo(env.MASTODON_URL, env.MASTODON_ACCOUNT);
-  } catch (error) {
-    console.error("Mastodon read failed", error);
-    const previous = await read(env, nowSite);
-    return previous ? (JSON.parse(previous.text) as Site).memo : null;
-  }
+/** The newest memo as one line. A warned memo shows its warning, never
+ *  the words behind it. */
+export function pickMemo(site: MemosSite | null): Memo | null {
+  const memo = site?.memos[0];
+  if (!memo) return null;
+  return {
+    at: memo.at,
+    url: memo.url,
+    text: memo.spoiler || plainText(memo.html),
+    cw: memo.spoiler !== "",
+    media: memo.media.length,
+  };
 }
 
 export const nowSite: Snapshot = {
   key: "now:site",
   version: SITE_VERSION,
   compose: async (env, today) => {
-    const [music, movies, tokens, memo] = await Promise.all([
+    const [music, movies, tokens, memos] = await Promise.all([
       stored<MusicSite>(env, musicSite),
       stored<MoviesSite>(env, moviesSite),
       stored<TokensSite>(env, tokensSite),
-      latestMemo(env),
+      stored<MemosSite>(env, memosSite),
     ]);
     const site: Site = {
       schemaVersion: SITE_VERSION,
@@ -108,7 +125,7 @@ export const nowSite: Snapshot = {
       listen: pickListen(music),
       film: pickFilm(movies),
       tokens: pickTokens(tokens, today),
-      memo,
+      memo: pickMemo(memos),
     };
     return JSON.stringify(site);
   },

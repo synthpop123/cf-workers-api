@@ -29,7 +29,7 @@ production.
 
 ## Shape of the Worker
 
-- One Worker, six services. Each `src/services/<name>/` default-exports
+- One Worker, seven services. Each `src/services/<name>/` default-exports
   a `Service` (`lib/service.ts`): its name — also its path prefix and KV
   namespace — its snapshot, and any other routes. `src/services/index.ts`
   is the registry; `src/index.ts` derives `GET /<name>/site` for each and
@@ -71,7 +71,8 @@ production.
   `imagebed` bucket under the service's prefix, content-addressed so it is
   copied once. On the way in the Images binding (`IMAGE_TRANSFORM`) crops
   it to what the page draws, with room for dense screens, as WebP
-  (posters 320×480, Switch covers 128×128); the size is part of the key,
+  (posters 320×480, Switch covers 128×128; memo photos are scaled down
+  to 640 and 1600 wide instead, ratio kept); the size is part of the key,
   so resizing means new keys, never new bytes under old ones. A failed
   mirror (fetch or transform) stores nothing and omits the image; it
   never fails a composition or a sync.
@@ -308,18 +309,33 @@ production.
   the page wants more rows, change the constant here (a payload change:
   bump `SITE_VERSION`).
 
+## memos
+
+- The latest `MEMOS` public statuses, boosts and replies excluded, from
+  the self-hosted Mastodon (`MASTODON_URL`, `MASTODON_ACCOUNT`), narrowed
+  in `services/memos/mastodon.ts`. The status HTML ships as Mastodon
+  renders it; the page's allow-list sanitizer owns it. Everything else on
+  a status (account, application, mentions, counts) is never typed.
+- Photos are copied as WebP at 640 and 1600 wide, scaled down with their
+  ratio kept (`services/memos/media.ts`), keyed by attachment id and
+  width. The previous stored body stands for the copies that exist, so
+  a run asks R2 about new attachments only, and copies at most `MAX_NEW`
+  of them; one that waits is served from the instance meanwhile (it is
+  self-hosted, like Koito). Video, gifv and audio stream from the
+  instance: the Images binding transforms stills only.
+- Alt text ships as the attachment's own description or null; the page
+  falls back to the memo's words, never to words behind a warning.
+
 ## now
 
 - The home page's Now tiles. It **reads the other services' stored
-  snapshots** (`read`, any day) and never composes them: composing a
-  source from here would put that upstream on this service's clock. The
-  only upstream of its own is Mastodon (`MASTODON_URL`,
-  `MASTODON_ACCOUNT`), one status, narrowed to plain text so the page has
-  no HTML to sanitize; when the instance is down, the last stored memo
-  carries over.
-- The heartbeat refreshes it right after music, in one job, so the
-  listen on the home page is never a run behind /misc. Tokens and films
-  reach it within five minutes of their own writes.
+  snapshots** (`read`, any day), music, movies, tokens and memos, and
+  never composes them or asks an upstream: composing a source from here
+  would put that upstream on this service's clock. The memo is reduced
+  to one line of plain text (its warning, if it has one).
+- The heartbeat refreshes it right after music and memos, in one job, so
+  the home page is never a run behind them. Tokens and films reach it
+  within five minutes of their own writes.
 - Keep the body small and only what the tiles show. It is a KV write
   whenever any field moves, so a field that changes on every tokens
   submission or every listen costs a write each time.

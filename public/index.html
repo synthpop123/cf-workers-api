@@ -663,7 +663,8 @@
         <tr><td><code>/flights</code></td><td>self-hosted AirTrail</td><td>snapshot only</td><td>daily, at local midnight</td></tr>
         <tr><td><code>/music</code></td><td>self-hosted Koito</td><td>snapshot only</td><td>every 5 min</td></tr>
         <tr><td><code>/movies</code></td><td>Letterboxd RSS</td><td>R2 <code>imagebed</code> (posters)</td><td>every 3 hours</td></tr>
-        <tr><td><code>/now</code></td><td>the stored music, movies and tokens views, Mastodon</td><td>snapshot only</td><td>every 5 min, after music</td></tr>
+        <tr><td><code>/memos</code></td><td>self-hosted Mastodon</td><td>R2 <code>imagebed</code> (photos)</td><td>every 5 min</td></tr>
+        <tr><td><code>/now</code></td><td>the stored music, movies, tokens and memos views</td><td>snapshot only</td><td>every 5 min, after music and memos</td></tr>
       </tbody>
     </table>
   </section>
@@ -692,13 +693,13 @@
       <h3 class="label">Poll · the scheduler</h3>
       <p class="flow">
         <span class="node">cron</span><span class="arr" aria-hidden="true">→</span>
-        <span class="node">AirTrail · Koito · Letterboxd · Nintendo</span><span class="arr" aria-hidden="true">→</span>
+        <span class="node">AirTrail · Koito · Letterboxd · Mastodon · Nintendo</span><span class="arr" aria-hidden="true">→</span>
         <span class="node" data-store>KV · snapshot</span><span class="arr" aria-hidden="true">+</span>
         <span class="node" data-store>R2 · artwork</span>
       </p>
       <p class="cap">
         A five-minute heartbeat recomposes the snapshots that read an upstream, each on its own
-        cadence — music every 5 minutes and the home page's Now right after it, movies every 3 hours, flights once a day at midnight — and a
+        cadence — music and memos every 5 minutes and the home page's Now right after them, movies every 3 hours, flights once a day at midnight — and a
         composition whose bytes did not move writes nothing. The Switch sync runs on its own daily
         trigger, with its own CPU and subrequest budget. Third-party artwork is copied into R2 once,
         keyed by content.
@@ -810,13 +811,24 @@
       </li>
       <li class="ep">
         <span class="method" data-m="GET">GET</span>
+        <button class="path" type="button" data-copy="/memos/site" aria-label="Copy https://api.lkwplus.com/memos/site">/memos/site
+          <svg class="ic-copy" aria-hidden="true"><use href="#i-copy"/></svg>
+          <svg class="ic-check" aria-hidden="true"><use href="#i-check"/></svg>
+        </button>
+        <a class="ep-aside" href="/memos/site" target="_blank" rel="noopener" aria-label="Open /memos/site in a new tab">open ↗</a>
+        <div class="ep-body">
+          <p>The latest public Mastodon statuses, attachments resolved to what renders; photos copied to <code>img.lkwplus.com</code> as WebP at 640 and 1600 wide.</p>
+        </div>
+      </li>
+      <li class="ep">
+        <span class="method" data-m="GET">GET</span>
         <button class="path" type="button" data-copy="/now/site" aria-label="Copy https://api.lkwplus.com/now/site">/now/site
           <svg class="ic-copy" aria-hidden="true"><use href="#i-copy"/></svg>
           <svg class="ic-check" aria-hidden="true"><use href="#i-check"/></svg>
         </button>
         <a class="ep-aside" href="/now/site" target="_blank" rel="noopener" aria-label="Open /now/site in a new tab">open ↗</a>
         <div class="ep-body">
-          <p>What <a href="https://lkwplus.com" rel="noopener">lkwplus.com</a> shows under Now: the latest listen and film, today’s token totals and the newest memo as plain text. Read from the stored views, never their upstreams, plus one Mastodon call.</p>
+          <p>What <a href="https://lkwplus.com" rel="noopener">lkwplus.com</a> shows under Now: the latest listen and film, today’s token totals and the newest memo as plain text. Read from the stored views, never their upstreams.</p>
         </div>
       </li>
       <li class="ep">

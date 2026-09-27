@@ -10,7 +10,8 @@
  *
  * Every copy is shrunk on the way in: the Images binding
  * (`IMAGE_TRANSFORM`) crops it to the size the page draws at, times the
- * densest screen that matters, and re-encodes it as WebP. Upstream art is
+ * densest screen that matters (or, for a photo, scales it down to a width
+ * with its ratio kept), and re-encodes it as WebP. Upstream art is
  * sized for someone else's layout (Nintendo's 256px covers are drawn at
  * 44px here), and a copy made once is served for good, so this is the one
  * place the bytes can be made to fit. The key names the output — callers
@@ -31,13 +32,16 @@ const QUALITY = 80;
 
 export type Mirrored = "copied" | "present" | "failed";
 
-/** The box an image is cropped to fill, in pixels. */
-export interface Size {
-  width: number;
-  height: number;
-}
+/**
+ * What the copy is shrunk to, in pixels: a box it is cropped to fill
+ * (artwork drawn at a fixed shape), or with `fit: "scale-down"` a width
+ * it is scaled down to keep, ratio intact and never enlarged (photos).
+ */
+export type Size =
+  | { width: number; height: number; fit?: "cover" }
+  | { width: number; fit: "scale-down" };
 
-/** Ensure `key` holds the image at `source`, cropped to `size` as WebP. */
+/** Ensure `key` holds the image at `source`, shrunk to `size` as WebP. */
 export async function mirrorImage(
   env: Env,
   key: string,
@@ -49,7 +53,7 @@ export async function mirrorImage(
     const response = await fetch(source, { signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (!response.ok || !response.body) return "failed";
     const result = await env.IMAGE_TRANSFORM.input(response.body)
-      .transform({ ...size, fit: "cover" })
+      .transform({ fit: "cover", ...size })
       .output({ format: FORMAT, quality: QUALITY });
     await env.IMAGES.put(key, await result.response().arrayBuffer(), {
       httpMetadata: { contentType: result.contentType(), cacheControl: CACHE_CONTROL },

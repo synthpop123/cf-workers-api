@@ -8,8 +8,9 @@
  *   /flights/*   the AirTrail flight map                        (KV)
  *   /music/*     Koito listening history                        (KV)
  *   /movies/*    the Letterboxd diary                      (KV + R2)
+ *   /memos/*     Mastodon statuses, photos mirrored        (KV + R2)
  *   /now/*       the home page's Now tiles, from the stored
- *                music, movies and tokens views plus Mastodon   (KV)
+ *                music, movies, tokens and memos views          (KV)
  *   /misc        the four /misc snapshots in one response
  *   /health      liveness
  *
