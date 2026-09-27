@@ -7,6 +7,7 @@ import {
   RECENT_DAYS,
   SITE_VERSION,
   switchSite,
+  TITLE_OVERRIDES,
 } from "../../src/services/switch/site";
 import { call } from "../helpers";
 import { shiftDays } from "../../src/services/switch/stats";
@@ -116,6 +117,21 @@ describe("composeSiteBody", () => {
     expect(site.games[1]).toMatchObject({ totalMinutes: 40, recentMinutes: 0 });
 
     expect(site.observedAt).toBe(new Date(1787980089000).toISOString());
+  });
+
+  it("lets a hand-set name win over the store's and the console's", async () => {
+    await seed();
+    const [id, name] = [...TITLE_OVERRIDES][0];
+    const now = Date.now();
+    await env.SWITCH_DB.prepare(
+      `INSERT INTO games (application_id, title, store_title, total_playing_time, day_count, first_seen, updated_at)
+       VALUES (?, 'コンソール名', 'Store Name', 5, 1, ?, ?)`
+    )
+      .bind(id, now, now)
+      .run();
+    const site = await composeSiteBody(env);
+    expect(site.games.find((g) => g.applicationId === id)?.title).toBe(name);
+    expect(site.games.find((g) => g.applicationId === "NEW")?.title).toBe("New Game");
   });
 
   it("never leaks device serials or player identity", async () => {

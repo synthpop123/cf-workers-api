@@ -30,6 +30,17 @@ const HEATMAP_DAYS = 365;
 /** The window `recentMinutes` covers, today inclusive. */
 export const RECENT_DAYS = 14;
 
+/**
+ * Names set by hand, by application id, for titles the storefront never
+ * answered for (store.ts leaves `store_title` NULL), where the console's
+ * own name is the wrong language. They win over both. A Map, not an
+ * object literal: see the note on keying by upstream ids in CLAUDE.md.
+ */
+export const TITLE_OVERRIDES: ReadonlyMap<string, string> = new Map([
+  // The HK and US storefronts have no page for the Switch 2 Edition.
+  ["0100AC101BFA2000", "Fitness Boxing 3: Your Personal Trainer"],
+]);
+
 export interface Site {
   schemaVersion: number;
   today: string;
@@ -101,6 +112,7 @@ export async function composeSiteBody(env: Env, today = isoToday()): Promise<Sit
   const library = buildLibrary(
     (catalogResult.results as CatalogRow[]).map((row) => ({
       ...row,
+      title: TITLE_OVERRIDES.get(row.application_id) ?? row.title,
       // The mirrored copy is the only URL that ships; a cover that failed to
       // mirror renders as the empty tile rather than a hotlink to Nintendo.
       image_url: publicUrl(env, row.image_key),
