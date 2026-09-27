@@ -69,8 +69,12 @@ production.
   on free), which is why the Switch sync has a trigger to itself.
 - Third-party artwork goes through `lib/images.ts` into the shared
   `imagebed` bucket under the service's prefix, content-addressed so it is
-  copied once. A failed mirror omits the image; it never fails a
-  composition or a sync.
+  copied once. On the way in the Images binding (`IMAGE_TRANSFORM`) crops
+  it to what the page draws, with room for dense screens, as WebP
+  (posters 320×480, Switch covers 128×128); the size is part of the key,
+  so resizing means new keys, never new bytes under old ones. A failed
+  mirror (fetch or transform) stores nothing and omits the image; it
+  never fails a composition or a sync.
 
 ## Rules that hold everywhere
 

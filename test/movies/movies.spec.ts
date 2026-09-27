@@ -4,7 +4,7 @@ import { moviesSite } from "../../src/services/movies";
 import { composeSite, FILMS, latest } from "../../src/services/movies/compose";
 import { decodeXml, parseFeed } from "../../src/services/movies/letterboxd";
 import { posterSource } from "../../src/services/movies/posters";
-import { call } from "../helpers";
+import { call, imageResponse } from "../helpers";
 
 const POSTER =
   "https://a.ltrbxd.com/resized/film-poster/1/9/7/0/1/2/197012-the-hateful-eight-0-600-0-900-crop.jpg?v=0428be5b84";
@@ -58,10 +58,10 @@ describe("composition", () => {
     expect(composeSite("lkw123", []).profileUrl).toBe("https://letterboxd.com/lkw123/");
   });
 
-  it("maps a poster to its 460×690 crop and a versioned key", () => {
+  it("maps a poster to its 460×690 crop and a versioned, sized key", () => {
     expect(posterSource(POSTER)).toEqual({
       source: POSTER.replace("-0-600-0-900-crop", "-0-460-0-690-crop"),
-      key: "movies/posters/197012-the-hateful-eight-0428be5b84.jpg",
+      key: "movies/posters/197012-the-hateful-eight-0428be5b84-320.webp",
     });
     // A poster the member picked for their diary lives under another path
     // and takes the same crops.
@@ -69,7 +69,7 @@ describe("composition", () => {
       "https://a.ltrbxd.com/resized/sm/upload/sw/w2/ep/v4/9O50TVszkz0dcP5g6Ej33UhR7vw-0-600-0-900-crop.jpg?v=5a65f5202f";
     expect(posterSource(custom)).toEqual({
       source: custom.replace("-0-600-0-900-crop", "-0-460-0-690-crop"),
-      key: "movies/posters/9O50TVszkz0dcP5g6Ej33UhR7vw-5a65f5202f.jpg",
+      key: "movies/posters/9O50TVszkz0dcP5g6Ej33UhR7vw-5a65f5202f-320.webp",
     });
     expect(posterSource("https://s.ltrbxd.com/static/img/empty-poster-230.png")).toBeNull();
     expect(posterSource("https://evil.example/resized/x-0-600-0-900-crop.jpg")).toBeNull();
@@ -78,13 +78,13 @@ describe("composition", () => {
 
 describe("GET /movies/site", () => {
   it("reads the feed, mirrors posters once and serves img.lkwplus.com URLs", async () => {
-    const key = "movies/posters/197012-the-hateful-eight-0428be5b84.jpg";
+    const key = "movies/posters/197012-the-hateful-eight-0428be5b84-320.webp";
     await env.IMAGES.delete(key);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = input instanceof Request ? input.url : String(input);
       if (url === "https://letterboxd.com/lkw123/rss/") return new Response(FEED);
       expect(url).toContain("-0-460-0-690-crop.jpg");
-      return new Response("jpeg-bytes");
+      return imageResponse();
     });
 
     const response = await call("/movies/site");
@@ -96,6 +96,6 @@ describe("GET /movies/site", () => {
     ]);
     // One feed read, one poster copy: the second film shares the poster.
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(await (await env.IMAGES.get(key))?.text()).toBe("jpeg-bytes");
+    expect((await env.IMAGES.head(key))?.httpMetadata?.contentType).toBe("image/webp");
   });
 });

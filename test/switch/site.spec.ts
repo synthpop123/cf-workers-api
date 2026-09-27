@@ -58,7 +58,7 @@ async function seed() {
     ).bind(longAgo, longAgo, now, now),
     env.SWITCH_DB.prepare(
       `INSERT INTO games (application_id, title, store_title, image_key, shop_url, total_playing_time, day_count, first_played_date, last_played_date, price_hkd_cents, first_seen, updated_at)
-       VALUES ('NEW', '新游戏', 'New Game', 'switch/games/abc_256.jpg', 'https://shop.example/new', 65, 1, ?, ?, 32900, ?, ?)`
+       VALUES ('NEW', '新游戏', 'New Game', 'switch/games/abc_256-128.webp', 'https://shop.example/new', 65, 1, ?, ?, 32900, ?, ?)`
     ).bind(today, today, now, now),
     env.SWITCH_DB.prepare(
       `INSERT INTO exchange_rates (pair, rate, captured_at) VALUES ('HKD/CNY', 0.86, ?)`
@@ -110,7 +110,7 @@ describe("composeSiteBody", () => {
       recentMinutes: 65,
       totalMinutes: 65,
       shopUrl: "https://shop.example/new",
-      imageUrl: `${env.IMAGE_BASE_URL}/switch/games/abc_256.jpg`,
+      imageUrl: `${env.IMAGE_BASE_URL}/switch/games/abc_256-128.webp`,
     });
     // Outside the recent window, so the lifetime total stands alone.
     expect(site.games[1]).toMatchObject({ totalMinutes: 40, recentMinutes: 0 });

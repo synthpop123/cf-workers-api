@@ -74,6 +74,11 @@
     { "binding": "IMAGES", "bucket_name": "imagebed" }
   ],
 
+  // Cloudflare Images, used only to shrink artwork once as it is mirrored
+  // (lib/images.ts). Billed per unique transformation; each image is
+  // transformed once, so a month stays far inside the free 5,000.
+  "images": { "binding": "IMAGE_TRANSFORM" },
+
   // Keys must match SCHEDULE in src/schedule.ts (checked by the tests).
   "triggers": {
     "crons": ["*/5 * * * *", "0 1 * * *"]

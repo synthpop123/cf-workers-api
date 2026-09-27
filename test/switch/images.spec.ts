@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { publicUrl } from "../../src/lib/images";
 import { coverSource, mirrorCover } from "../../src/services/switch/images";
+import { captureErrors, imageResponse } from "../helpers";
 
 const HASH = "f17751dcb0b347249d0aaf783edf1ea5";
 const CDN = "https://atum-img-lp1.cdn.nintendo.net";
@@ -13,7 +14,9 @@ afterEach(() => vi.restoreAllMocks());
 function cdn(status = 200) {
   return vi
     .spyOn(globalThis, "fetch")
-    .mockResolvedValue(new Response(status === 200 ? "jpeg-bytes" : "", { status }));
+    .mockImplementation(async () =>
+      status === 200 ? imageResponse() : new Response("", { status })
+    );
 }
 
 describe("coverSource", () => {
@@ -25,15 +28,15 @@ describe("coverSource", () => {
 });
 
 describe("mirrorCover", () => {
-  it("copies a cover once and keys it by the upstream hash", async () => {
-    const key = `switch/games/${HASH}_256.jpg`;
+  it("copies a cover once, as WebP, keyed by the upstream hash", async () => {
+    const key = `switch/games/${HASH}_256-128.webp`;
     await env.IMAGES.delete(key);
     const fetched = cdn();
 
     expect(await mirrorCover(env, SOURCE)).toEqual({ key, copied: true });
     const object = await env.IMAGES.get(key);
-    expect(await object?.text()).toBe("jpeg-bytes");
-    expect(object?.httpMetadata?.contentType).toBe("image/jpeg");
+    expect(object?.httpMetadata?.contentType).toBe("image/webp");
+    expect(object?.httpMetadata?.cacheControl).toContain("immutable");
 
     expect(await mirrorCover(env, SOURCE)).toEqual({ key, copied: false });
     expect(fetched).toHaveBeenCalledTimes(1);
@@ -51,12 +54,23 @@ describe("mirrorCover", () => {
 
   it("leaves the key null when the CDN refuses", async () => {
     const missing = "0".repeat(32);
-    await env.IMAGES.delete(`switch/games/${missing}_256.jpg`);
+    await env.IMAGES.delete(`switch/games/${missing}_256-128.webp`);
     cdn(404);
     expect(await mirrorCover(env, `${CDN}/i/c/${missing}_256`)).toEqual({
       key: null,
       copied: false,
     });
+  });
+
+  it("stores nothing when the bytes are not an image", async () => {
+    const other = "1".repeat(32);
+    const key = `switch/games/${other}_256-128.webp`;
+    await env.IMAGES.delete(key);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("not-an-image"));
+    const errors = captureErrors();
+    expect(await mirrorCover(env, `${CDN}/i/c/${other}_256`)).toEqual({ key: null, copied: false });
+    expect(await env.IMAGES.head(key)).toBeNull();
+    expect(errors).toHaveBeenCalled();
   });
 });
 
@@ -70,11 +84,12 @@ describe("publicUrl", () => {
 describe("known cover keys", () => {
   it("skips R2 only when the stored key matches the current content hash", async () => {
     const head = vi.spyOn(env.IMAGES, "head");
-    const key = `switch/games/${HASH}_256.jpg`;
+    const key = `switch/games/${HASH}_256-128.webp`;
     expect(await mirrorCover(env, SOURCE, key)).toEqual({ key, copied: false });
     expect(head).not.toHaveBeenCalled();
     cdn();
-    await mirrorCover(env, SOURCE, "switch/games/old_256.jpg");
+    // A key from before the covers were resized counts as another key.
+    await mirrorCover(env, SOURCE, `switch/games/${HASH}_256.jpg`);
     expect(head).toHaveBeenCalledTimes(1);
   });
 });

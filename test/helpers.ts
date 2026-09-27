@@ -32,3 +32,17 @@ export async function call(
 export function captureErrors() {
   return vi.spyOn(console, "error").mockImplementation(() => {});
 }
+
+/**
+ * A real image (a 12×18 PNG), for anything that goes through the Images
+ * binding: the mirror transforms what it fetches, and bytes that are not
+ * an image fail that step.
+ */
+const PNG = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAwAAAASCAIAAADgy6hbAAAAGUlEQVR4nGM8oWHDQAgwEVQxqmhUEZUVAQA8RwFQ9+p3ggAAAABJRU5ErkJggg=="
+  ),
+  (char) => char.charCodeAt(0)
+);
+
+export const imageResponse = () => new Response(PNG, { headers: { "Content-Type": "image/png" } });

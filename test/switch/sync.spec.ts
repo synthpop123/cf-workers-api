@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runSync } from "../../src/services/switch/sync";
 import type { Env } from "../../src/env";
 import type { DailySummary } from "../../src/services/switch/moon/types";
-import { captureErrors } from "../helpers";
+import { captureErrors, imageResponse } from "../helpers";
 
 const bindings = { ...env, PCTL_SESSION_TOKEN: "test-session" } as Env;
 const cover = "https://example.com/i/c/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_256";
@@ -52,7 +52,7 @@ beforeEach(async () => {
   days = [day("2026-09-01", "Older", 20), day("2026-09-02", "Latest", 30)];
   extraDevices = new Map();
   whitelist = [{ applicationId: "GAME", title: "Whitelist", firstPlayDate: "2026-08-01" }];
-  await env.IMAGES.delete("switch/games/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_256.jpg");
+  await env.IMAGES.delete("switch/games/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_256-128.webp");
   failDaily = false;
   failExtras = false;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -89,7 +89,7 @@ beforeEach(async () => {
             },
           });
     if (failExtras) throw new Error("Optional source unavailable");
-    if (url.hostname === "example.com") return new Response("image");
+    if (url.hostname === "example.com") return imageResponse();
     if (url.hostname === "api.frankfurter.dev") return Response.json({ rates: { CNY: 0.86 } });
     if (url.hostname === "ec.nintendo.com") return new Response("", { status: 404 });
     throw new Error(`Unexpected test URL: ${url}`);

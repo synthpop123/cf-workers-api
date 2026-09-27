@@ -4,20 +4,22 @@
  * of hotlinking Letterboxd's CDN.
  *
  * Letterboxd serves any poster at a set of fixed crops named in the URL
- * (`…-0-600-0-900-crop.jpg?v=<hash>`); the mirror stores the 460×690 crop,
- * twice the ~230px a card is ever drawn at. Both kinds of poster take the
+ * (`…-0-600-0-900-crop.jpg?v=<hash>`); the mirror fetches the 460×690
+ * crop and stores it at 320×480 WebP (lib/images.ts), enough for a card
+ * drawn ~156px wide at 2× or ~110px wide at 3×. Both kinds of poster take the
  * same crops: a film's own (`/resized/film-poster/1/2/…/<id>-<slug>-…`) and
  * one a member picked for their diary (`/resized/sm/upload/…/<hash>-…`).
  *
  * The key is the file's last path segment plus its `v` hash, which changes
- * when the artwork does — so a poster is copied once, and a replaced one
- * lands under a new key.
+ * when the artwork does, plus the stored width — so a poster is copied
+ * once, and a replaced one (or a new size) lands under a new key.
  */
 
 import type { Env } from "../../env";
-import { mirrorImage, publicUrl } from "../../lib/images";
+import { mirrorImage, publicUrl, type Size } from "../../lib/images";
 
 const CROP = "-0-460-0-690-crop";
+const SIZE: Size = { width: 320, height: 480 };
 const POSTER_RE =
   /^https:\/\/a\.ltrbxd\.com\/resized\/(?:[\w-]+\/)+([\w-]+?)-0-\d+-0-\d+-crop\.jpg(?:\?v=([0-9a-f]+))?$/;
 
@@ -29,7 +31,7 @@ export function posterSource(url: string): { source: string; key: string } | nul
   const [, slug, version] = match;
   return {
     source: url.replace(/-0-\d+-0-\d+-crop/, CROP),
-    key: `movies/posters/${slug}${version ? `-${version}` : ""}.jpg`,
+    key: `movies/posters/${slug}${version ? `-${version}` : ""}-${SIZE.width}.webp`,
   };
 }
 
@@ -37,6 +39,6 @@ export function posterSource(url: string): { source: string; key: string } | nul
 export async function mirrorPoster(env: Env, url: string | null): Promise<string | null> {
   const poster = url ? posterSource(url) : null;
   if (!poster) return null;
-  const result = await mirrorImage(env, poster.key, poster.source, "image/jpeg");
+  const result = await mirrorImage(env, poster.key, poster.source, SIZE);
   return result === "failed" ? null : publicUrl(env, poster.key);
 }
