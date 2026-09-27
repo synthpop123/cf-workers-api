@@ -29,7 +29,7 @@ production.
 
 ## Shape of the Worker
 
-- One Worker, five services. Each `src/services/<name>/` default-exports
+- One Worker, six services. Each `src/services/<name>/` default-exports
   a `Service` (`lib/service.ts`): its name — also its path prefix and KV
   namespace — its snapshot, and any other routes. `src/services/index.ts`
   is the registry; `src/index.ts` derives `GET /<name>/site` for each and
@@ -307,3 +307,19 @@ production.
 - music's `LISTENS` and movies' `FILMS` are exactly what /misc shows. If
   the page wants more rows, change the constant here (a payload change:
   bump `SITE_VERSION`).
+
+## now
+
+- The home page's Now tiles. It **reads the other services' stored
+  snapshots** (`read`, any day) and never composes them: composing a
+  source from here would put that upstream on this service's clock. The
+  only upstream of its own is Mastodon (`MASTODON_URL`,
+  `MASTODON_ACCOUNT`), one status, narrowed to plain text so the page has
+  no HTML to sanitize; when the instance is down, the last stored memo
+  carries over.
+- The heartbeat refreshes it right after music, in one job, so the
+  listen on the home page is never a run behind /misc. Tokens and films
+  reach it within five minutes of their own writes.
+- Keep the body small and only what the tiles show. It is a KV write
+  whenever any field moves, so a field that changes on every tokens
+  submission or every listen costs a write each time.

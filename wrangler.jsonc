@@ -21,7 +21,11 @@
     // The self-hosted Koito instance the music service reads.
     "KOITO_URL": "https://music.lkwplus.com",
     // Whose Letterboxd diary the movies service reads.
-    "LETTERBOXD_USER": "lkw123"
+    "LETTERBOXD_USER": "lkw123",
+    // The Mastodon instance and account id whose newest status the now
+    // service shows.
+    "MASTODON_URL": "https://mastodon.lkwplus.com",
+    "MASTODON_ACCOUNT": "114671030739656846"
   },
 
   // Set with `npx wrangler secret put <NAME>`; .dev.vars locally. Declared

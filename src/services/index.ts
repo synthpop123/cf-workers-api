@@ -8,6 +8,7 @@ import type { Service } from "../lib/service";
 import flights from "./flights";
 import movies from "./movies";
 import music from "./music";
+import now from "./now";
 import switchPlay from "./switch";
 import tokens from "./tokens";
 
@@ -17,6 +18,7 @@ export const SERVICES = [
   flights,
   music,
   movies,
+  now,
 ] as const satisfies readonly Service[];
 
-export { flights, movies, music, switchPlay, tokens };
+export { flights, movies, music, now, switchPlay, tokens };

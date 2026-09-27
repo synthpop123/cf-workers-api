@@ -39,7 +39,7 @@ describe("routing", () => {
   it("lists the services on /health", async () => {
     expect(await (await call("/health")).json()).toEqual({
       ok: true,
-      services: ["tokens", "switch", "flights", "music", "movies"],
+      services: ["tokens", "switch", "flights", "music", "movies", "now"],
     });
   });
 

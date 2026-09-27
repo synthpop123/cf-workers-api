@@ -7,7 +7,10 @@
  *
  *   `*\/5 * * * *`  the heartbeat, for the snapshots that poll an upstream
  *                   music     every 5 min — the page marks a listen under
- *                             ten minutes old as playing
+ *                             ten minutes old as playing — and then
+ *                   now       from what music just stored, plus the
+ *                             newest memo, so the home page's listen
+ *                             is never a run behind /misc
  *                   movies    every 3 hours — each run is one RSS fetch,
  *                             kept rare so Letterboxd has no reason to
  *                             rate-limit it
@@ -32,7 +35,7 @@
 import type { Env } from "./env";
 import { TIME_ZONE } from "./lib/http";
 import { refresh, type Snapshot } from "./lib/snapshot";
-import { flights, movies, music } from "./services";
+import { flights, movies, music, now } from "./services";
 import { runSync } from "./services/switch";
 
 /** Minutes between runs, counted from midnight; or a daily `HH:MM`. Both
@@ -55,7 +58,20 @@ export const TRIGGERS = new Map<string, Job[]>([
   [
     "*/5 * * * *",
     [
-      refreshing(music.site, { every: 5 }),
+      {
+        name: `refresh ${music.site.key}, then ${now.site.key}`,
+        cadence: { every: 5 },
+        // now reads the music snapshot, so it waits for it; a failed music
+        // run still refreshes now, whose tokens and memo tiles move alone.
+        run: async (env) => {
+          try {
+            await refresh(env, music.site);
+          } catch (error) {
+            console.error(`refresh ${music.site.key} failed`, error);
+          }
+          return refresh(env, now.site);
+        },
+      },
       refreshing(movies.site, { every: 180 }),
       refreshing(flights.site, { at: "00:00" }),
     ],
