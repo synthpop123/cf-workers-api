@@ -1,45 +1,49 @@
 /**
  * now — the Now section on the lkwplus.com home page: the latest listen,
- * the latest film, today's token usage and the newest memo, in one small
+ * the latest film, today's token usage and the last flight, in one small
  * body instead of four feeds.
  *
  * All four are already composed elsewhere, so this service fetches
- * nothing: it reads the stored music, movies, tokens and memos snapshots
- * and keeps the one entry of each the home page shows, the memo reduced
- * to one line of plain text. A source with nothing stored is `null`,
- * which blanks only that tile.
+ * nothing: it reads the stored music, movies, tokens and flights
+ * snapshots and keeps the one entry of each the home page shows, the
+ * flight with its airports' cities beside their codes. A source with
+ * nothing stored is `null`, which blanks only that tile.
  *
- * Refreshed by the heartbeat right after music and memos (schedule.ts),
- * so a new listen or memo reaches both views in the same run. A body that did not move
+ * Refreshed by the heartbeat right after music (schedule.ts), so a new
+ * listen reaches both views in the same run. A body that did not move
  * writes nothing, and the fields are few on purpose: it moves when a
- * track changes, a film is logged, a device reports tokens or a memo is
- * posted, never because some other part of those payloads did.
+ * track changes, a film is logged, a device reports tokens or a flight
+ * is logged, never because some other part of those payloads did.
  */
 
 import type { Env } from "../../env";
 import type { Service } from "../../lib/service";
 import { read, type Snapshot } from "../../lib/snapshot";
-import { memosSite } from "../memos";
-import type { Site as MemosSite } from "../memos/compose";
-import { plainText } from "../memos/mastodon";
+import { flightsSite } from "../flights";
+import type { Site as FlightsSite } from "../flights/compose";
 import type { Site as MoviesSite, SiteFilm } from "../movies/compose";
 import { moviesSite } from "../movies";
 import type { Site as MusicSite, SiteListen } from "../music/compose";
 import { musicSite } from "../music";
 import { tokensSite } from "../tokens/site";
 
-export const SITE_VERSION = 1;
+export const SITE_VERSION = 2;
 
-export interface Memo {
-  /** ISO instant the status was posted. */
-  at: string;
-  url: string;
-  /** Plain text: the content warning when there is one, else the body. */
-  text: string;
-  /** True when `text` is a content warning standing in for the body. */
-  cw: boolean;
-  /** Attachments of any kind. */
-  media: number;
+export interface Place {
+  code: string;
+  city: string | null;
+}
+
+export interface Flight {
+  /** The calendar day flown. */
+  date: string;
+  /** In the direction flown. */
+  from: Place;
+  to: Place;
+  km: number;
+  minutes: number | null;
+  airline: string | null;
+  aircraft: string | null;
 }
 
 export interface TokensToday {
@@ -54,7 +58,7 @@ export interface Site {
   listen: SiteListen | null;
   film: SiteFilm | null;
   tokens: TokensToday | null;
-  memo: Memo | null;
+  flight: Flight | null;
 }
 
 interface TokensSite {
@@ -95,29 +99,27 @@ export function pickTokens(site: TokensSite | null, today: string): TokensToday 
     : { tokens: 0, cost: 0, messages: 0 };
 }
 
-/** The newest memo as one line. A warned memo shows its warning, never
- *  the words behind it. */
-export function pickMemo(site: MemosSite | null): Memo | null {
-  const memo = site?.memos[0];
-  if (!memo) return null;
-  return {
-    at: memo.at,
-    url: memo.url,
-    text: memo.spoiler || plainText(memo.html),
-    cw: memo.spoiler !== "",
-    media: memo.media.length,
-  };
+/** The last flight, each airport named by its city as well as its code. */
+export function pickFlight(site: FlightsSite | null): Flight | null {
+  const last = site?.last;
+  if (!last) return null;
+  const place = (code: string): Place => ({
+    code,
+    city: site.airports.find((airport) => airport.code === code)?.city ?? null,
+  });
+  const { date, km, minutes, airline, aircraft } = last;
+  return { date, from: place(last.from), to: place(last.to), km, minutes, airline, aircraft };
 }
 
 export const nowSite: Snapshot = {
   key: "now:site",
   version: SITE_VERSION,
   compose: async (env, today) => {
-    const [music, movies, tokens, memos] = await Promise.all([
+    const [music, movies, tokens, flights] = await Promise.all([
       stored<MusicSite>(env, musicSite),
       stored<MoviesSite>(env, moviesSite),
       stored<TokensSite>(env, tokensSite),
-      stored<MemosSite>(env, memosSite),
+      stored<FlightsSite>(env, flightsSite),
     ]);
     const site: Site = {
       schemaVersion: SITE_VERSION,
@@ -125,7 +127,7 @@ export const nowSite: Snapshot = {
       listen: pickListen(music),
       film: pickFilm(movies),
       tokens: pickTokens(tokens, today),
-      memo: pickMemo(memos),
+      flight: pickFlight(flights),
     };
     return JSON.stringify(site);
   },

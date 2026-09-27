@@ -12,7 +12,7 @@ describe("greatCircleKm", () => {
 describe("composeSite", () => {
   const today = "2026-01-01";
 
-  it("ships the map, never a single flight, who or which seat", () => {
+  it("ships the map and the last flight, never who, which seat or when in the day", () => {
     const site = composeSite([upstream()], today);
     const text = JSON.stringify(site);
     for (const secret of [
@@ -31,7 +31,16 @@ describe("composeSite", () => {
     }
     expect(site.schemaVersion).toBe(SITE_VERSION);
     expect(Object.keys(site).sort()).toEqual(
-      ["aircraft", "airlines", "airports", "routes", "schemaVersion", "stats", "today"].sort()
+      [
+        "aircraft",
+        "airlines",
+        "airports",
+        "last",
+        "routes",
+        "schemaVersion",
+        "stats",
+        "today",
+      ].sort()
     );
     expect(site.routes).toEqual([
       {
@@ -45,6 +54,41 @@ describe("composeSite", () => {
     ]);
     expect(site.airlines).toEqual([{ code: "CA", name: "Air China", flights: 1 }]);
     expect(site.aircraft).toEqual([{ code: "B77W", name: "Boeing 777-300ER", flights: 1 }]);
+  });
+
+  it("ships the last flight flown, as flown, and breaks a same-day tie by departure", () => {
+    const site = composeSite(
+      [
+        upstream(),
+        upstream({
+          date: "2025-11-02",
+          departure: "2025-11-02T01:00:00.000+00:00",
+          from: PEK,
+          to: GMP,
+        }),
+        upstream({
+          date: "2025-11-02",
+          departure: "2025-11-02T09:00:00.000+00:00",
+          from: GMP,
+          to: SHA,
+          duration: null,
+          airline: null,
+          aircraft: null,
+        }),
+        upstream({ date: "2026-03-01", from: SHA, to: PEK }),
+      ],
+      today
+    );
+    expect(site.last).toEqual({
+      date: "2025-11-02",
+      from: "GMP",
+      to: "SHA",
+      km: greatCircleKm(GMP, SHA),
+      minutes: null,
+      airline: null,
+      aircraft: null,
+    });
+    expect(composeSite([upstream({ date: "2026-03-01" })], today).last).toBeNull();
   });
 
   it("names the city without AirTrail's district", () => {

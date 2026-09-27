@@ -4,15 +4,17 @@
  * unit tests live.
  *
  * What ships is the map, not the log: airports, the routes between them
- * and totals, with no single flight in it — no flight number and no
- * date but the first and the latest. And never who or which seat: the
- * payload is built field by field from the typed slice in `airtrail.ts`,
- * so a PNR in a note or a seat number has no path into it.
+ * and totals. The one single flight in it is the latest one flown (`last`,
+ * the home page's Last flight tile): its day, the airports in the
+ * direction flown, distance, duration, airline and aircraft. No flight
+ * number, no time of day, no other date but the first. And never who or
+ * which seat: the payload is built field by field from the typed slice in
+ * `airtrail.ts`, so a PNR in a note or a seat number has no path into it.
  */
 
 import type { AirTrailAirport, AirTrailFlight } from "./airtrail";
 
-export const SITE_VERSION = 1;
+export const SITE_VERSION = 2;
 
 export interface SiteAirport {
   /** IATA when it has one, ICAO otherwise — the code the page prints. */
@@ -65,10 +67,24 @@ export interface SiteStats {
   lastDate: string | null;
 }
 
+/** The latest flight flown, as the home page names it. */
+export interface SiteLast {
+  date: string;
+  /** Airport codes in the direction flown, unlike a route's code order. */
+  from: string;
+  to: string;
+  km: number;
+  minutes: number | null;
+  airline: string | null;
+  aircraft: string | null;
+}
+
 export interface Site {
   schemaVersion: number;
   today: string;
   stats: SiteStats;
+  /** Null until a flight has been flown. */
+  last: SiteLast | null;
   /** Most visited first. */
   airports: SiteAirport[];
   /** Most flown first, then longest. */
@@ -113,6 +129,11 @@ const minutesOf = (flight: AirTrailFlight): number | null =>
   typeof flight.duration === "number" && flight.duration > 0
     ? Math.round(flight.duration / 60)
     : null;
+
+/** Whether `a` was flown after `b`: by day, then by departure within a
+ *  day, and a later entry in AirTrail's list wins a tie. */
+const later = (a: AirTrailFlight, b: AirTrailFlight): boolean =>
+  a.date !== b.date ? a.date > b.date : (a.departure ?? "") >= (b.departure ?? "");
 
 /** Tally by name, most first; ties in name order so the output is stable. */
 function tally(items: ({ name: string; code: string | null } | null)[]): SiteCount[] {
@@ -162,6 +183,7 @@ export function composeSite(upstream: AirTrailFlight[], today: string): Site {
   let minutes = 0;
   let firstDate: string | null = null;
   let lastDate: string | null = null;
+  let last: { flight: AirTrailFlight; from: string; to: string; km: number } | null = null;
 
   for (const flight of rows) {
     const a = place(flight.from as AirTrailAirport);
@@ -201,6 +223,9 @@ export function composeSite(upstream: AirTrailFlight[], today: string): Site {
     }
     if (!firstDate || flight.date < firstDate) firstDate = flight.date;
     if (!lastDate || flight.date > lastDate) lastDate = flight.date;
+    if (!last || later(flight, last.flight)) {
+      last = { flight, from: a.code, to: b.code, km: route.km };
+    }
   }
 
   const visited = [...airports.values()].filter((airport) => airport.visits > 0);
@@ -225,6 +250,15 @@ export function composeSite(upstream: AirTrailFlight[], today: string): Site {
   return {
     schemaVersion: SITE_VERSION,
     today,
+    last: last && {
+      date: last.flight.date,
+      from: last.from,
+      to: last.to,
+      km: last.km,
+      minutes: minutesOf(last.flight),
+      airline: last.flight.airline?.name.trim() || null,
+      aircraft: last.flight.aircraft?.name.trim() || null,
+    },
     stats: {
       flights: flown.length,
       upcoming,

@@ -9,14 +9,15 @@
  *                   music     every 5 min — the page marks a listen under
  *                             ten minutes old as playing — alongside
  *                   memos     every 5 min, one Mastodon call, and then
- *                   now       from what those two just stored, so the
- *                             home page is never a run behind them
+ *                   now       from what music just stored, so the home
+ *                             page is never a run behind it
  *                   movies    every 3 hours — each run is one RSS fetch,
  *                             kept rare so Letterboxd has no reason to
  *                             rate-limit it
- *                   flights   daily at 00:00 — the map changes when a
- *                             flight is logged, and `upcoming` flips at
- *                             midnight
+ *                   flights   hourly — the map and the home page's last
+ *                             flight change when a flight is logged, and
+ *                             `upcoming` flips at midnight, which is on
+ *                             the hour
  *   `0 1 * * *`     the Switch sync (09:00 Asia/Shanghai, after Nintendo's
  *                   overnight recalculation) — on a trigger of its own
  *                   because each trigger is its own invocation, with its
@@ -61,8 +62,9 @@ export const TRIGGERS = new Map<string, Job[]>([
       {
         name: `refresh ${music.site.key} and ${memos.site.key}, then ${now.site.key}`,
         cadence: { every: 5 },
-        // now reads the music and memos snapshots, so it waits for both; a
-        // failed one still refreshes now, whose other tiles move alone.
+        // now reads the music snapshot, so it waits for it; memos rides
+        // along in the same run. A failed one still refreshes now, whose
+        // other tiles move alone.
         run: async (env) => {
           const sources = [music.site, memos.site];
           const results = await Promise.allSettled(sources.map((site) => refresh(env, site)));
@@ -75,7 +77,7 @@ export const TRIGGERS = new Map<string, Job[]>([
         },
       },
       refreshing(movies.site, { every: 180 }),
-      refreshing(flights.site, { at: "00:00" }),
+      refreshing(flights.site, { every: 60 }),
     ],
   ],
   ["0 1 * * *", [{ name: "switch sync", run: runSync }]],

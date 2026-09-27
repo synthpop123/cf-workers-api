@@ -660,11 +660,11 @@
       <tbody>
         <tr><td><code>/tokens</code></td><td><code>tokens</code> CLI on each machine, quota collectors</td><td>D1 <code>tokens-usage</code> · R2 <code>tokens-archive</code></td><td>every submission and report</td></tr>
         <tr><td><code>/switch</code></td><td>Nintendo Parental Controls API, eShop</td><td>D1 <code>switch-play</code> · R2 <code>imagebed</code></td><td>daily sync, 01:00 UTC</td></tr>
-        <tr><td><code>/flights</code></td><td>self-hosted AirTrail</td><td>snapshot only</td><td>daily, at local midnight</td></tr>
+        <tr><td><code>/flights</code></td><td>self-hosted AirTrail</td><td>snapshot only</td><td>hourly</td></tr>
         <tr><td><code>/music</code></td><td>self-hosted Koito</td><td>snapshot only</td><td>every 5 min</td></tr>
         <tr><td><code>/movies</code></td><td>Letterboxd RSS</td><td>R2 <code>imagebed</code> (posters)</td><td>every 3 hours</td></tr>
         <tr><td><code>/memos</code></td><td>self-hosted Mastodon</td><td>R2 <code>imagebed</code> (photos)</td><td>every 5 min</td></tr>
-        <tr><td><code>/now</code></td><td>the stored music, movies, tokens and memos views</td><td>snapshot only</td><td>every 5 min, after music and memos</td></tr>
+        <tr><td><code>/now</code></td><td>the stored music, movies, tokens and flights views</td><td>snapshot only</td><td>every 5 min, after music and memos</td></tr>
       </tbody>
     </table>
   </section>
@@ -699,7 +699,7 @@
       </p>
       <p class="cap">
         A five-minute heartbeat recomposes the snapshots that read an upstream, each on its own
-        cadence — music and memos every 5 minutes and the home page's Now right after them, movies every 3 hours, flights once a day at midnight — and a
+        cadence — music and memos every 5 minutes and the home page's Now right after them, movies every 3 hours, flights hourly — and a
         composition whose bytes did not move writes nothing. The Switch sync runs on its own daily
         trigger, with its own CPU and subrequest budget. Third-party artwork is copied into R2 once,
         keyed by content.
@@ -784,7 +784,7 @@
         </button>
         <a class="ep-aside" href="/flights/site" target="_blank" rel="noopener" aria-label="Open /flights/site in a new tab">open ↗</a>
         <div class="ep-body">
-          <p>The flight map — airports, routes, airline and aircraft tallies and totals. No single flight, flight number or seat ever ships.</p>
+          <p>The flight map — airports, routes, airline and aircraft tallies and totals — and the last flight flown, by day and airports. No flight number, time of day or seat ever ships.</p>
         </div>
       </li>
       <li class="ep">
@@ -828,7 +828,7 @@
         </button>
         <a class="ep-aside" href="/now/site" target="_blank" rel="noopener" aria-label="Open /now/site in a new tab">open ↗</a>
         <div class="ep-body">
-          <p>What <a href="https://lkwplus.com" rel="noopener">lkwplus.com</a> shows under Now: the latest listen and film, today’s token totals and the newest memo as plain text. Read from the stored views, never their upstreams.</p>
+          <p>What <a href="https://lkwplus.com" rel="noopener">lkwplus.com</a> shows under Now: the latest listen and film, today’s token totals and the last flight, its airports named by city. Read from the stored views, never their upstreams.</p>
         </div>
       </li>
       <li class="ep">

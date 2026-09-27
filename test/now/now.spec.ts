@@ -2,10 +2,10 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isoToday } from "../../src/lib/http";
 import { store } from "../../src/lib/snapshot";
-import { memosSite } from "../../src/services/memos";
+import { flightsSite } from "../../src/services/flights";
 import { moviesSite } from "../../src/services/movies";
 import { musicSite } from "../../src/services/music";
-import { nowSite, pickMemo, pickTokens } from "../../src/services/now";
+import { nowSite, pickFlight, pickTokens } from "../../src/services/now";
 import { tokensSite } from "../../src/services/tokens/site";
 import { call } from "../helpers";
 
@@ -27,16 +27,30 @@ const FILM = {
   poster: "https://img.test/p.webp",
 };
 
-const MEMO = {
-  url: "https://mastodon.test/@lkw123/117342281905751669",
-  at: "2026-09-27T09:25:27.717Z",
-  edited: false,
-  html: "<p>I like x.test &amp; Opus</p><p>second</p>",
-  spoiler: "",
-  sensitive: false,
-  language: "en",
-  emojis: [],
-  media: [{ kind: "image" }],
+const FLIGHTS = {
+  airports: [
+    { code: "JNH", city: "Jiaxing" },
+    { code: "PEK", city: "Beijing" },
+  ],
+  last: {
+    date: "2026-08-16",
+    from: "JNH",
+    to: "PEK",
+    km: 1142,
+    minutes: 135,
+    airline: "Air China",
+    aircraft: "Airbus A321",
+  },
+};
+
+const FLIGHT = {
+  date: "2026-08-16",
+  from: { code: "JNH", city: "Jiaxing" },
+  to: { code: "PEK", city: "Beijing" },
+  km: 1142,
+  minutes: 135,
+  airline: "Air China",
+  aircraft: "Airbus A321",
 };
 
 const seed = async (today: string) => {
@@ -67,14 +81,16 @@ const seed = async (today: string) => {
   );
   await store(
     env,
-    memosSite,
-    JSON.stringify({ schemaVersion: memosSite.version, profileUrl: "x", memos: [MEMO, MEMO] })
+    flightsSite,
+    JSON.stringify({ schemaVersion: flightsSite.version, routes: [], ...FLIGHTS })
   );
 };
 
 beforeEach(() =>
   Promise.all(
-    [musicSite, moviesSite, tokensSite, memosSite, nowSite].map(({ key }) => env.CACHE.delete(key))
+    [musicSite, moviesSite, tokensSite, flightsSite, nowSite].map(({ key }) =>
+      env.CACHE.delete(key)
+    )
   )
 );
 afterEach(() => vi.restoreAllMocks());
@@ -88,19 +104,16 @@ describe("pickTokens", () => {
   });
 });
 
-describe("pickMemo", () => {
-  it("reduces the newest memo to one line, a warning in place of the words", () => {
-    const site = { schemaVersion: 1, profileUrl: "x", memos: [MEMO] } as never;
-    expect(pickMemo(site)).toEqual({
-      at: MEMO.at,
-      url: MEMO.url,
-      text: "I like x.test & Opus second",
-      cw: false,
-      media: 1,
+describe("pickFlight", () => {
+  it("names each end by its city, null when there is no flight or no view", () => {
+    expect(pickFlight(FLIGHTS as never)).toEqual(FLIGHT);
+    const unknown = { airports: [], last: FLIGHTS.last } as never;
+    expect(pickFlight(unknown)).toMatchObject({
+      from: { code: "JNH", city: null },
+      to: { code: "PEK", city: null },
     });
-    const warned = { memos: [{ ...MEMO, spoiler: "spoilers" }] } as never;
-    expect(pickMemo(warned)).toMatchObject({ text: "spoilers", cw: true });
-    expect(pickMemo(null)).toBeNull();
+    expect(pickFlight({ airports: [], last: null } as never)).toBeNull();
+    expect(pickFlight(null)).toBeNull();
   });
 });
 
@@ -117,13 +130,7 @@ describe("GET /now/site", () => {
       listen: LISTEN,
       film: FILM,
       tokens: { tokens: 39_700_000, cost: 14.48, messages: 155 },
-      memo: {
-        at: MEMO.at,
-        url: MEMO.url,
-        text: "I like x.test & Opus second",
-        cw: false,
-        media: 1,
-      },
+      flight: FLIGHT,
     });
     expect(fetched).not.toHaveBeenCalled();
   });
@@ -131,7 +138,7 @@ describe("GET /now/site", () => {
   it("nulls a source with nothing stored, and never composes one", async () => {
     const fetched = vi.spyOn(globalThis, "fetch");
     const site = await (await call("/now/site")).json();
-    expect(site).toMatchObject({ listen: null, film: null, tokens: null, memo: null });
+    expect(site).toMatchObject({ listen: null, film: null, tokens: null, flight: null });
     expect(fetched).not.toHaveBeenCalled();
   });
 });

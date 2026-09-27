@@ -55,6 +55,12 @@ describe("runScheduled", () => {
     expect(new Set(hosts)).toEqual(new Set(["music.lkwplus.com", "mastodon.lkwplus.com"]));
 
     hosts.length = 0;
+    await runScheduled("*/5 * * * *", local("10:00"), env);
+    expect(new Set(hosts)).toEqual(
+      new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "flight.lkwplus.com"])
+    );
+
+    hosts.length = 0;
     await runScheduled("*/5 * * * *", local("00:00"), env);
     expect(new Set(hosts)).toEqual(
       new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "letterboxd.com", "flight.lkwplus.com"])

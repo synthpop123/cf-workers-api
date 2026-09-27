@@ -288,9 +288,12 @@ production.
 
 - **The payload is the map, not the log.** `composeSite` in
   `services/flights/compose.ts` ships airports, routes (airport pairs, either direction
-  merged), airline/aircraft tallies and totals — never a single flight, a
-  flight number or a per-flight date. The homepage shows where, not when,
-  and the payload claims no more than the page shows. Redaction is
+  merged), airline/aircraft tallies and totals, and one single flight:
+  `last`, the most recent flown, for the home page's Last flight tile —
+  its day, airports as flown, distance, duration, airline and aircraft,
+  never a flight number or a time of day (`departure` is read only to
+  order two flights on one day). The map shows where, not when, and the
+  payload claims no more than the pages show. Redaction is
   structural: `services/flights/airtrail.ts` types only the upstream fields composition
   reads (PNRs in `note`, seats, gates, registrations and passenger ids are
   never typed), and the payload is built field by field from that slice.
@@ -329,13 +332,13 @@ production.
 ## now
 
 - The home page's Now tiles. It **reads the other services' stored
-  snapshots** (`read`, any day), music, movies, tokens and memos, and
+  snapshots** (`read`, any day), music, movies, tokens and flights, and
   never composes them or asks an upstream: composing a source from here
-  would put that upstream on this service's clock. The memo is reduced
-  to one line of plain text (its warning, if it has one).
-- The heartbeat refreshes it right after music and memos, in one job, so
-  the home page is never a run behind them. Tokens and films reach it
-  within five minutes of their own writes.
+  would put that upstream on this service's clock. The flight's airports
+  are named by city from the flights view's own airport list.
+- The heartbeat refreshes it right after music, in one job, so the home
+  page is never a run behind it. Tokens, films and flights (hourly) reach
+  it within five minutes of their own writes.
 - Keep the body small and only what the tiles show. It is a KV write
   whenever any field moves, so a field that changes on every tokens
   submission or every listen costs a write each time.
