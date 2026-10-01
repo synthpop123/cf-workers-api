@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { publicUrl } from "../../src/lib/images";
+import { linkedKeys, publicUrl } from "../../src/lib/images";
 import { coverSource, mirrorCover } from "../../src/services/switch/images";
 import { captureErrors, imageResponse } from "../helpers";
 
@@ -81,15 +81,29 @@ describe("publicUrl", () => {
   });
 });
 
+describe("linkedKeys", () => {
+  it("reads back every key a stored body links, and nothing else", () => {
+    const body = JSON.stringify({
+      poster: publicUrl(env, "movies/posters/a-1f-320.webp"),
+      srcset: `${publicUrl(env, "memos/media/7-640.webp")} 640w`,
+      elsewhere: "https://example.com/movies/posters/b.webp",
+    });
+    expect(linkedKeys(env, body)).toEqual(
+      new Set(["movies/posters/a-1f-320.webp", "memos/media/7-640.webp"])
+    );
+    expect(linkedKeys(env, null)).toEqual(new Set());
+  });
+});
+
 describe("known cover keys", () => {
   it("skips R2 only when the stored key matches the current content hash", async () => {
     const head = vi.spyOn(env.IMAGES, "head");
     const key = `switch/games/${HASH}_256-128.webp`;
-    expect(await mirrorCover(env, SOURCE, key)).toEqual({ key, copied: false });
+    expect(await mirrorCover(env, SOURCE, new Set([key]))).toEqual({ key, copied: false });
     expect(head).not.toHaveBeenCalled();
     cdn();
     // A key from before the covers were resized counts as another key.
-    await mirrorCover(env, SOURCE, `switch/games/${HASH}_256.jpg`);
+    await mirrorCover(env, SOURCE, new Set([`switch/games/${HASH}_256.jpg`]));
     expect(head).toHaveBeenCalledTimes(1);
   });
 });

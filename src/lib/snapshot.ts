@@ -10,8 +10,8 @@
  * Freshness is decided by events, never by a TTL:
  *   - a service that owns its writes (tokens submissions and quota
  *     reports, the Switch sync) stores a new snapshot as part of the write;
- *   - a service that polls an upstream (AirTrail, Koito, Letterboxd) is
- *     refreshed by the scheduled heartbeat (see index.ts);
+ *   - a service that polls an upstream (AirTrail, Koito, Letterboxd,
+ *     Mastodon) is refreshed by the scheduled heartbeat (schedule.ts);
  *   - a read recomposes inline only when there is no usable copy — none
  *     stored, one of another schema version (a deploy changed the shape;
  *     the page would reject it), or one composed as of another day (every
@@ -32,7 +32,6 @@
  * layer no event can invalidate.
  */
 
-import type { Env } from "../env";
 import { etagMatches, etagOf, isoToday, json } from "./http";
 import type { Handler } from "./router";
 
@@ -128,16 +127,22 @@ export async function load(env: Env, snapshot: Snapshot): Promise<Stored | null>
   }
 }
 
-/** 200 with the body, or 304 when the client already holds it. The
+/** 200 with the JSON body, or 304 when the client already holds it. The
  *  header set is identical across both. */
-export function serve(request: Request, { text, meta }: Stored): Response {
+export function serve(
+  request: Request,
+  {
+    text,
+    meta: { etag, changedAt },
+  }: { text: string; meta: Pick<SnapshotMeta, "etag" | "changedAt"> }
+): Response {
   const headers = {
     "Content-Type": "application/json",
     "Cache-Control": "no-cache",
-    ETag: meta.etag,
-    "Last-Modified": new Date(meta.changedAt).toUTCString(),
+    ETag: etag,
+    "Last-Modified": new Date(changedAt).toUTCString(),
   };
-  if (etagMatches(request, meta.etag)) return new Response(null, { status: 304, headers });
+  if (etagMatches(request, etag)) return new Response(null, { status: 304, headers });
   return new Response(text, { headers });
 }
 

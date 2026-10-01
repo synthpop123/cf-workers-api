@@ -7,7 +7,7 @@
  * accident.
  */
 
-import type { Env } from "../../env";
+import { fetchOk } from "../../lib/http";
 
 export interface AirTrailAirport {
   icao: string | null;
@@ -32,17 +32,13 @@ export interface AirTrailFlight {
   aircraft: { name: string; icao: string | null } | null;
 }
 
-const TIMEOUT_MS = 10_000;
-
 export async function fetchFlights(env: Env): Promise<AirTrailFlight[]> {
-  const response = await fetch(new URL("/api/flight/list", env.AIRTRAIL_URL), {
+  const response = await fetchOk("AirTrail", new URL("/api/flight/list", env.AIRTRAIL_URL), {
     headers: {
       Authorization: `Bearer ${env.AIRTRAIL_API_KEY}`,
       Accept: "application/json",
     },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`AirTrail answered ${response.status}`);
   const body = (await response.json()) as { success?: boolean; flights?: unknown };
   if (!Array.isArray(body.flights)) throw new Error("AirTrail payload has no flights");
   return body.flights as AirTrailFlight[];

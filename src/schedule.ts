@@ -7,10 +7,10 @@
  *
  *   `*\/5 * * * *`  the heartbeat, for the snapshots that poll an upstream
  *                   music     every 5 min — the page marks a listen under
- *                             ten minutes old as playing — alongside
- *                   memos     every 5 min, one Mastodon call, and then
+ *                             ten minutes old as playing — and then
  *                   now       from what music just stored, so the home
  *                             page is never a run behind it
+ *                   memos     every 5 min, one Mastodon call
  *                   movies    every 3 hours — each run is one RSS fetch,
  *                             kept rare so Letterboxd has no reason to
  *                             rate-limit it
@@ -33,7 +33,6 @@
  * checks both).
  */
 
-import type { Env } from "./env";
 import { TIME_ZONE } from "./lib/http";
 import { refresh, type Snapshot } from "./lib/snapshot";
 import { flights, memos, movies, music, now } from "./services";
@@ -60,22 +59,18 @@ export const TRIGGERS = new Map<string, Job[]>([
     "*/5 * * * *",
     [
       {
-        name: `refresh ${music.site.key} and ${memos.site.key}, then ${now.site.key}`,
+        name: `refresh ${music.site.key}, then ${now.site.key}`,
         cadence: { every: 5 },
-        // now reads the music snapshot, so it waits for it; memos rides
-        // along in the same run. A failed one still refreshes now, whose
-        // other tiles move alone.
+        // now reads the music snapshot, so it waits for it. A failed music
+        // run still refreshes now, whose other tiles move alone.
         run: async (env) => {
-          const sources = [music.site, memos.site];
-          const results = await Promise.allSettled(sources.map((site) => refresh(env, site)));
-          results.forEach((result, i) => {
-            if (result.status === "rejected") {
-              console.error(`refresh ${sources[i].key} failed`, result.reason);
-            }
-          });
+          await refresh(env, music.site).catch((error) =>
+            console.error(`refresh ${music.site.key} failed`, error)
+          );
           return refresh(env, now.site);
         },
       },
+      refreshing(memos.site, { every: 5 }),
       refreshing(movies.site, { every: 180 }),
       refreshing(flights.site, { every: 60 }),
     ],

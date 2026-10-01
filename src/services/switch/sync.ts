@@ -8,14 +8,14 @@
  * History past that window survives only because it is already in D1.
  */
 
-import type { Env } from "../../env";
 import { coverSource, mirrorCover } from "./images";
 import { fetchIdToken } from "./moon/auth";
 import { MoonClient } from "./moon/client";
 import { MOON_CLIENT_CONFIG } from "./moon/config";
 import type { DailySummary, OwnedDevice, ParentalControlSetting, PlayedGame } from "./moon/types";
 import { applicationId } from "./moon/types";
-import { refreshSiteCache } from "./site";
+import { refresh } from "../../lib/snapshot";
+import { switchSite } from "./site";
 import { refreshExchangeRate, resolveStoreFacts } from "./store";
 
 interface DeviceRow {
@@ -454,9 +454,9 @@ export async function runSync(env: Env): Promise<SyncResult> {
     for (const setting of settings) applyWhitelist(setting, games, now);
 
     const { results: storedCovers } = await env.SWITCH_DB.prepare(
-      "SELECT application_id, image_key FROM games WHERE image_key IS NOT NULL"
-    ).all<{ application_id: string; image_key: string }>();
-    const knownCovers = new Map(storedCovers.map((row) => [row.application_id, row.image_key]));
+      "SELECT image_key FROM games WHERE image_key IS NOT NULL"
+    ).all<{ image_key: string }>();
+    const knownCovers = new Set(storedCovers.map((row) => row.image_key));
     for (const game of games.values()) {
       const mirrored = await mirrorCover(
         env,
@@ -467,7 +467,7 @@ export async function runSync(env: Env): Promise<SyncResult> {
           large: game.image_large ?? undefined,
           extraLarge: game.image_extra_large ?? undefined,
         }),
-        knownCovers.get(game.application_id)
+        knownCovers
       );
       game.image_key = mirrored.key;
       if (mirrored.copied) imageCount += 1;
@@ -491,7 +491,7 @@ export async function runSync(env: Env): Promise<SyncResult> {
       resolveStoreFacts(env, now),
       refreshExchangeRate(env, now),
     ]);
-    await refreshSiteCache(env);
+    await refresh(env, switchSite);
 
     const result: SyncResult = {
       ok: true,

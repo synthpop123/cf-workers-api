@@ -12,6 +12,8 @@
  * dropped, since /tokens/site is public.
  */
 
+import { isNumber, isRecord, textOrNull } from "../../lib/narrow";
+
 /** One surface's share of a window's spend ("Claude Code", 80). */
 export interface QuotaShare {
   label: string;
@@ -32,12 +34,14 @@ export interface QuotaWindow {
 
 /** A dollar-denominated allowance beside the percentage windows —
  *  Claude's cloud session credits. Dollars, because that is the unit the
- *  vendor meters it in and a percentage would hide the size of it. */
+ *  vendor meters it in and a percentage would hide the size of it. A
+ *  grant, not a window: when it lapses it is gone rather than refilled,
+ *  so it carries `expiresAt` where a window carries `resetsAt`. */
 export interface QuotaAllowance {
   label: string;
   usedDollars: number;
   limitDollars: number;
-  resetsAt: string | null;
+  expiresAt: string | null;
 }
 
 /** A banked manual reset: when it lapses, and what spending it does
@@ -78,10 +82,6 @@ export interface QuotaPlan {
   extraUsage: QuotaExtraUsage | null;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /** Any parseable instant in, ISO-8601 UTC out; anything else is null.
  *  The vendors report offsets ("+00:00") and sub-second precision, and
  *  the payload should read the same whichever it sent. */
@@ -90,12 +90,6 @@ function isoOrNull(value: unknown): string | null {
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
-
-const isNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const textOrNull = (value: unknown): string | null =>
-  typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 
 function toWindow(
   label: string,
@@ -247,7 +241,9 @@ const narrowClaude: Narrow = (body) => {
       label,
       usedDollars: isNumber(allowance.used_dollars) ? Math.max(0, allowance.used_dollars) : 0,
       limitDollars: allowance.limit_dollars,
-      resetsAt: isoOrNull(allowance.resets_at),
+      // Anthropic calls it `resets_at`; for a one-off grant that is
+      // the day the unspent remainder lapses.
+      expiresAt: isoOrNull(allowance.resets_at),
     });
   }
 

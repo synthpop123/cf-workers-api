@@ -8,6 +8,8 @@
  * The same feed also carries lists, which have none.
  */
 
+import { fetchOk } from "../../lib/http";
+
 export interface DiaryEntry {
   title: string;
   year: number | null;
@@ -22,19 +24,19 @@ export interface DiaryEntry {
   poster: string | null;
 }
 
-const TIMEOUT_MS = 10_000;
-
 export function feedUrl(user: string): string {
   return `https://letterboxd.com/${encodeURIComponent(user)}/rss/`;
 }
 
-const ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-};
+/** A Map, not an object: the name comes from the feed, and an object
+ *  would answer `&constructor;` with Object.prototype's. */
+const ENTITIES = new Map([
+  ["amp", "&"],
+  ["lt", "<"],
+  ["gt", ">"],
+  ["quot", '"'],
+  ["apos", "'"],
+]);
 
 /** Undo XML escaping: the five named entities and numeric references. */
 export function decodeXml(text: string): string {
@@ -44,9 +46,11 @@ export function decodeXml(text: string): string {
         name[1] === "x" || name[1] === "X"
           ? Number.parseInt(name.slice(2), 16)
           : Number.parseInt(name.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      // Past U+10FFFF fromCodePoint throws, and one bad reference must
+      // not fail the whole feed.
+      return code <= 0x10ffff ? String.fromCodePoint(code) : match;
     }
-    return ENTITIES[name.toLowerCase()] ?? match;
+    return ENTITIES.get(name.toLowerCase()) ?? match;
   });
 }
 
@@ -86,10 +90,8 @@ export function parseFeed(xml: string): DiaryEntry[] {
 }
 
 export async function fetchDiary(user: string): Promise<DiaryEntry[]> {
-  const response = await fetch(feedUrl(user), {
+  const response = await fetchOk("Letterboxd", feedUrl(user), {
     headers: { Accept: "application/rss+xml, application/xml" },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`Letterboxd answered ${response.status}`);
   return parseFeed(await response.text());
 }

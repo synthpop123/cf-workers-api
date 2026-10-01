@@ -15,11 +15,15 @@
  * This Worker sees percentages and timestamps and nothing else — which
  * also means it needs no vendor secrets of its own and no scheduled job.
  *
- * **One provider per request, stored under its own key.** The two legs
+ * **One provider per request, stored in its own row.** The two legs
  * fail independently — an expired Claude credential must not take the
- * Codex card down with it — so each report is its own write and each
- * plan carries its own `capturedAt`. A collector that can only reach one
- * vendor still gets to say so about that one.
+ * Codex card down with it — so each report overwrites only its own
+ * `quota_plans` row and each plan carries its own `capturedAt`. A
+ * collector that can only reach one vendor still gets to say so about
+ * that one. D1 rather than KV: a row is a D1 write, where a KV key cost
+ * one of the account's 1,000 daily KV writes on every report on top of
+ * the view's, and D1 reads its own writes, so the view composed next
+ * sees the plan just stored.
  *
  * Each vendor's body is its own shape and **nothing is passed through**:
  * these are third-party payloads (one of them a third-party CLI's stdout)
@@ -31,10 +35,11 @@
  * only the route around them.
  */
 
-import type { Env } from "../../env";
 import { json, isAuthorized } from "../../lib/http";
-import { isRecord, QUOTA_PROVIDERS, type QuotaPlan } from "./quota-registry";
-import { refreshSiteCache } from "./site";
+import { isRecord } from "../../lib/narrow";
+import { refresh } from "../../lib/snapshot";
+import { QUOTA_PROVIDERS, type QuotaPlan } from "./quota-registry";
+import { tokensSite } from "./site";
 
 /**
  * The reported provider rides in the path: `POST /tokens/quota/codex`. It
@@ -79,10 +84,16 @@ export async function handleQuota(request: Request, env: Env): Promise<Response>
     ...narrowed,
   };
 
-  // Storing the plan and recomposing the view is one call, so the card
-  // is live by the time the collector hears "accepted" — quota is its
-  // own write event, exactly like a submission.
-  await refreshSiteCache(env, plan);
+  // The view is recomposed before the collector hears "accepted", so the
+  // card is live by then — quota is its own write event, exactly like a
+  // submission.
+  await env.TOKENS_DB.prepare(
+    `INSERT INTO quota_plans (provider, body) VALUES (?1, ?2)
+     ON CONFLICT (provider) DO UPDATE SET body = excluded.body`
+  )
+    .bind(plan.provider, JSON.stringify(plan))
+    .run();
+  await refresh(env, tokensSite);
 
   return json({ success: true, provider: plan.provider, capturedAt: plan.capturedAt });
 }

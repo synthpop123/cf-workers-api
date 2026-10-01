@@ -10,15 +10,13 @@
  * What ships is play time and artwork.
  */
 
-import type { Env } from "../../env";
-import { isoToday } from "../../lib/http";
-import { refresh, type Snapshot } from "../../lib/snapshot";
+import { isoToday, shiftDays } from "../../lib/http";
+import type { Snapshot } from "../../lib/snapshot";
 import { publicUrl } from "../../lib/images";
 import {
   buildLibrary,
   computeStats,
   denseActivity,
-  shiftDays,
   type SiteActivity,
   type SiteGame,
   type SiteStats,
@@ -141,8 +139,3 @@ export const switchSite: Snapshot = {
   version: SITE_VERSION,
   compose: async (env, today) => JSON.stringify(await composeSiteBody(env, today)),
 };
-
-/** Recompose and store — the last step of every sync. */
-export async function refreshSiteCache(env: Env): Promise<void> {
-  await refresh(env, switchSite);
-}

@@ -44,7 +44,7 @@ flowchart LR
 | [`music`](src/services/music) | self-hosted [Koito](https://github.com/gabehf/Koito) | — | every 5 minutes |
 | [`movies`](src/services/movies) | Letterboxd RSS | R2 `imagebed` (posters) | every 3 hours |
 | [`memos`](src/services/memos) | self-hosted Mastodon | R2 `imagebed` (photos) | every 5 minutes |
-| [`now`](src/services/now) | the stored music, movies, tokens and flights views | — | every 5 minutes, right after music and memos |
+| [`now`](src/services/now) | the stored music, movies, tokens and flights views | — | every 5 minutes, right after music |
 
 - **tokens** implements the official server's submission contract and merge semantics for the `tokens` CLI — per-device, per-day, per-client replace with a regression guard, parser-revision floors, authoritative coverage windows, the official consistency checks — and keeps the full usage matrix (device × date × client × model × provider, every token category, messages, cost). Its view is the dashboard at [lkwplus.com/tokens](https://lkwplus.com/tokens), including subscription quota cards reported by a collector that keeps the vendor credentials on its own machine.
 - **switch** syncs daily play time from Nintendo's Parental Controls API, looks each title up once on the eShop (HK for the price, US for a consistent name) and mirrors cover art into R2.
@@ -106,7 +106,7 @@ The account-wide cron allowance is small (five triggers on the free plan), so th
 
 | Trigger | Jobs |
 |---|---|
-| `*/5 * * * *` | music and memos, then now, every 5 min · movies every 3 h · flights hourly |
+| `*/5 * * * *` | music then now, and memos, every 5 min · movies every 3 h · flights hourly |
 | `0 1 * * *` | the Switch sync |
 
 Each trigger is its own invocation with its own CPU and subrequest budget, which is why the Switch sync — the one heavy job — has a trigger to itself. A test checks that the triggers match `wrangler.jsonc` and that every cadence lands on a tick.
@@ -133,7 +133,7 @@ Reporters for the tokens service are set up per machine: [docs/tokens-reporters.
 ```sh
 cp .dev.vars.example .dev.vars   # local secrets
 npm run dev                      # wrangler dev, local D1/KV/R2
-npm run check                    # types + format + typecheck + tests
+npm run check                    # types + format/lint + typecheck + tests
 npm run format                   # Biome
 ```
 

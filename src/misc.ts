@@ -17,9 +17,8 @@
  * their change times.
  */
 
-import type { Env } from "./env";
-import { etagMatches, etagOf } from "./lib/http";
-import { load } from "./lib/snapshot";
+import { etagOf } from "./lib/http";
+import { load, serve } from "./lib/snapshot";
 import { flights, movies, music, switchPlay } from "./services";
 
 /** The sections, keyed in the bundle by service name. */
@@ -30,13 +29,5 @@ export async function handleMisc(request: Request, env: Env): Promise<Response> 
   const text = `{${SECTIONS.map(({ name }, i) => `"${name}":${stored[i]?.text ?? "null"}`).join(",")}}`;
   const etag = await etagOf(stored.map((entry) => entry?.meta.etag ?? "-").join(","));
   const changedAt = Math.max(0, ...stored.map((entry) => entry?.meta.changedAt ?? 0));
-
-  const headers = {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-cache",
-    ETag: etag,
-    "Last-Modified": new Date(changedAt).toUTCString(),
-  };
-  if (etagMatches(request, etag)) return new Response(null, { status: 304, headers });
-  return new Response(text, { headers });
+  return serve(request, { text, meta: { etag, changedAt } });
 }

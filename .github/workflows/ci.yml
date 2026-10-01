@@ -2,7 +2,7 @@ name: CI
 
 # Pushing to main deploys (Cloudflare Workers Builds), so this runs the
 # same gate as the Workers Builds build command, `npm run check`: type
-# generation, Biome format check, typecheck (src and tests) and the vitest
+# generation, Biome format + lint, typecheck (src and tests) and the vitest
 # suite. A red run on main means the deploy Workers Builds ran in parallel
 # was a regression; pull requests get the verdict before merging.
 on:

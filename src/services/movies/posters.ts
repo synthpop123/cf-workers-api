@@ -12,10 +12,10 @@
  *
  * The key is the file's last path segment plus its `v` hash, which changes
  * when the artwork does, plus the stored width — so a poster is copied
- * once, and a replaced one (or a new size) lands under a new key.
+ * once, and a replaced one (or a new size) lands under a new key. A key
+ * the previous body already links is taken as stored without asking R2.
  */
 
-import type { Env } from "../../env";
 import { mirrorImage, publicUrl, type Size } from "../../lib/images";
 
 const CROP = "-0-460-0-690-crop";
@@ -36,9 +36,13 @@ export function posterSource(url: string): { source: string; key: string } | nul
 }
 
 /** Mirror one poster, returning its public URL or null. */
-export async function mirrorPoster(env: Env, url: string | null): Promise<string | null> {
+export async function mirrorPoster(
+  env: Env,
+  url: string | null,
+  known?: ReadonlySet<string>
+): Promise<string | null> {
   const poster = url ? posterSource(url) : null;
   if (!poster) return null;
-  const result = await mirrorImage(env, poster.key, poster.source, SIZE);
+  const result = await mirrorImage(env, poster.key, poster.source, SIZE, known);
   return result === "failed" ? null : publicUrl(env, poster.key);
 }

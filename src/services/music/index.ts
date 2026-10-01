@@ -4,7 +4,7 @@
  * lkwplus.com/misc: all-time stats, a year of daily plays and the last
  * listens, composed from three Koito calls into one snapshot.
  *
- * Refreshed by the five-minute heartbeat (index.ts), the tightest cadence
+ * Refreshed by the five-minute heartbeat (schedule.ts), the tightest cadence
  * here, because the page marks a listen under ten minutes old as playing.
  */
 

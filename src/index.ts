@@ -10,7 +10,7 @@
  *   /movies/*    the Letterboxd diary                      (KV + R2)
  *   /memos/*     Mastodon statuses, photos mirrored        (KV + R2)
  *   /now/*       the home page's Now tiles, from the stored
- *                music, movies, tokens and memos views          (KV)
+ *                music, movies, tokens and flights views        (KV)
  *   /misc        the four /misc snapshots in one response
  *   /health      liveness
  *
@@ -18,11 +18,12 @@
  * `Service` (lib/service.ts): its name, which is also its path prefix, its
  * public view and its other routes. Everything they share — the router,
  * the snapshot store every view is served from, the image mirror, the HTTP
- * vocabulary — is in src/lib/. `/` is the service page (public/index.html), served by Workers
- * Static Assets before this router runs.
+ * vocabulary and the upstream narrowing primitives — is in src/lib/, and
+ * what runs on a schedule is in schedule.ts. `/` is the service page
+ * (public/index.html), served by Workers Static Assets before this router
+ * runs.
  */
 
-import type { Env } from "./env";
 import { json } from "./lib/http";
 import { createRouter } from "./lib/router";
 import { serviceRoutes } from "./lib/service";

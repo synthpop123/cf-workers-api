@@ -1,7 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runSync } from "../../src/services/switch/sync";
-import type { Env } from "../../src/env";
 import type { DailySummary } from "../../src/services/switch/moon/types";
 import { captureErrors, imageResponse } from "../helpers";
 

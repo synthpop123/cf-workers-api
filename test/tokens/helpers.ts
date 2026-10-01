@@ -9,7 +9,6 @@
 import { env } from "cloudflare:test";
 import { call } from "../helpers";
 import type { SubmissionPayload } from "../../src/services/tokens/payload";
-import { QUOTA_PROVIDERS } from "../../src/services/tokens/quota-registry";
 
 export const AUTH = { Authorization: "Bearer test-token" };
 
@@ -20,17 +19,13 @@ export async function reset(): Promise<void> {
     env.TOKENS_DB.prepare(`DELETE FROM daily_activity`),
     env.TOKENS_DB.prepare(`DELETE FROM devices`),
     env.TOKENS_DB.prepare(`DELETE FROM submissions`),
+    env.TOKENS_DB.prepare(`DELETE FROM quota_plans`),
   ]);
   const objects = await env.TOKENS_ARCHIVE.list();
   if (objects.objects.length > 0) {
     await env.TOKENS_ARCHIVE.delete(objects.objects.map((object) => object.key));
   }
   await env.CACHE.delete("tokens:site");
-  await Promise.all(
-    [...QUOTA_PROVIDERS.values()].map(({ provider }) =>
-      env.CACHE.delete(`tokens:quota:${provider}`)
-    )
-  );
 }
 
 export { call };

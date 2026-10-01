@@ -10,7 +10,7 @@
  * operations log, not data anyone would restore, and copying an
  * append-only log into a new object *every day* makes storage grow with
  * the square of time. (It is now a rolling 30-day window anyway — see
- * src/submit.ts.) Retention below bounds the other half of that growth:
+ * submit.ts.) Retention below bounds the other half of that growth:
  * the exports themselves are pruned past BACKUP_RETENTION_DAYS.
  *
  * Raw payload archive: the write path keeps each device's latest full
@@ -20,8 +20,7 @@
  * overwrites in place and never grows.
  */
 
-import type { Env } from "../../env";
-import { isoToday } from "../../lib/http";
+import { isoToday, shiftDays } from "../../lib/http";
 
 const BACKUP_PREFIX = "backup/";
 
@@ -53,9 +52,7 @@ export async function wipeArchive(env: Env): Promise<void> {
  * date parsing, and lexicographic order matches chronological order.
  */
 async function pruneBackups(env: Env, today: string): Promise<void> {
-  const cutoff = new Date(`${today}T12:00:00Z`);
-  cutoff.setUTCDate(cutoff.getUTCDate() - BACKUP_RETENTION_DAYS);
-  const oldest = `${BACKUP_PREFIX}${cutoff.toISOString().slice(0, 10)}.json`;
+  const oldest = `${BACKUP_PREFIX}${shiftDays(today, -BACKUP_RETENTION_DAYS)}.json`;
 
   let cursor: string | undefined;
   do {

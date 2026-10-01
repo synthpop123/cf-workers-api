@@ -16,7 +16,6 @@
  * is logged, never because some other part of those payloads did.
  */
 
-import type { Env } from "../../env";
 import type { Service } from "../../lib/service";
 import { read, type Snapshot } from "../../lib/snapshot";
 import { flightsSite } from "../flights";

@@ -1,3 +1,4 @@
+import { fetchUpstream } from "../../../lib/http";
 import type { MoonClientConfig } from "./config";
 import type {
   DailySummariesResponse,
@@ -71,7 +72,7 @@ export class MoonClient {
   }
 
   private async get<T extends object>(path: string): Promise<T> {
-    const response = await fetch(ZNMA_URL + path, { headers: this.headers() });
+    const response = await fetchUpstream(ZNMA_URL + path, { headers: this.headers() });
 
     if (response.status !== 200) {
       let body: MoonError | undefined;

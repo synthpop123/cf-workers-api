@@ -84,7 +84,7 @@
   // transformed once, so a month stays far inside the free 5,000.
   "images": { "binding": "IMAGE_TRANSFORM" },
 
-  // Keys must match SCHEDULE in src/schedule.ts (checked by the tests).
+  // Keys must match TRIGGERS in src/schedule.ts (checked by the tests).
   "triggers": {
     "crons": ["*/5 * * * *", "0 1 * * *"]
   },

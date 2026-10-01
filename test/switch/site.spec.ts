@@ -1,16 +1,15 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isoToday } from "../../src/lib/http";
+import { isoToday, shiftDays } from "../../src/lib/http";
 import {
   composeSiteBody,
-  refreshSiteCache,
   RECENT_DAYS,
   SITE_VERSION,
   switchSite,
   TITLE_OVERRIDES,
 } from "../../src/services/switch/site";
+import { refresh } from "../../src/lib/snapshot";
 import { call } from "../helpers";
-import { shiftDays } from "../../src/services/switch/stats";
 
 const today = isoToday();
 const yesterday = shiftDays(today, -1);
@@ -156,12 +155,12 @@ describe("GET /switch/site", () => {
   it("reuses unchanged sync bytes and ETag but revalidates on data or day changes", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-06T05:00:00Z"));
-    await refreshSiteCache(env);
+    await refresh(env, switchSite);
     const first = await read();
     const etag = first.headers.get("ETag")!;
     const bytes = await first.text();
     vi.setSystemTime(new Date("2026-09-06T06:00:00Z"));
-    await refreshSiteCache(env);
+    await refresh(env, switchSite);
     expect(await (await read()).text()).toBe(bytes);
     const unchanged = await read(etag);
     expect(unchanged.status).toBe(304);
@@ -174,7 +173,7 @@ describe("GET /switch/site", () => {
     expect((await read(etag)).status).toBe(304);
 
     await seed();
-    await refreshSiteCache(env);
+    await refresh(env, switchSite);
     const changed = await read(etag);
     expect(changed.status).toBe(200);
     const changedTag = changed.headers.get("ETag")!;

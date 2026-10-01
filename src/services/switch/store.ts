@@ -27,7 +27,7 @@
  * the payload reports how many titles it could price.
  */
 
-import type { Env } from "../../env";
+import { fetchUpstream } from "../../lib/http";
 
 const PRICE_REGION = "HK";
 const SOURCE_CURRENCY = "HKD";
@@ -112,7 +112,7 @@ async function readPage<T>(
 ): Promise<T | null> {
   const url = `https://ec.nintendo.com/apps/${applicationId.toLowerCase()}/${region}`;
   try {
-    const response = await fetch(url, { headers: { Accept: "text/html" } });
+    const response = await fetchUpstream(url, { headers: { Accept: "text/html" } });
     if (!response.ok) return null;
     for (const block of await linkedData(response)) {
       try {
@@ -145,7 +145,7 @@ export function fetchStoreFacts(applicationId: string): Promise<StoreFacts> {
 /** Refresh the HKD→CNY reference rate. Returns it, or null if unavailable. */
 export async function refreshExchangeRate(env: Env, now: number): Promise<number | null> {
   try {
-    const response = await fetch(RATE_URL);
+    const response = await fetchUpstream(RATE_URL);
     if (!response.ok) return null;
     const body = (await response.json()) as { rates?: { CNY?: number } };
     const rate = body.rates?.CNY;

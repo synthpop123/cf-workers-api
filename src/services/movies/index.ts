@@ -1,11 +1,12 @@
 /**
  * movies — the latest films from the member's Letterboxd diary
  * (`LETTERBOXD_USER`), read from their public RSS feed and served as the
- * poster wall on lkwplus.com/misc. Refreshed by the heartbeat (index.ts).
+ * poster wall on lkwplus.com/misc. Refreshed by the heartbeat (schedule.ts).
  */
 
 import type { Service } from "../../lib/service";
-import type { Snapshot } from "../../lib/snapshot";
+import { linkedKeys } from "../../lib/images";
+import { read, type Snapshot } from "../../lib/snapshot";
 import { composeSite, latest, SITE_VERSION } from "./compose";
 import { fetchDiary } from "./letterboxd";
 import { mirrorPoster } from "./posters";
@@ -15,10 +16,13 @@ export const moviesSite: Snapshot = {
   version: SITE_VERSION,
   compose: async (env) => {
     const films = latest(await fetchDiary(env.LETTERBOXD_USER));
+    const known = linkedKeys(env, (await read(env, moviesSite))?.text);
     // A rewatch shares its poster; copy each one once.
     const sources = [...new Set(films.flatMap((film) => (film.poster ? [film.poster] : [])))];
     const mirrored = new Map(
-      await Promise.all(sources.map(async (url) => [url, await mirrorPoster(env, url)] as const))
+      await Promise.all(
+        sources.map(async (url) => [url, await mirrorPoster(env, url, known)] as const)
+      )
     );
     return JSON.stringify(
       composeSite(

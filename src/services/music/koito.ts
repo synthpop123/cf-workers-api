@@ -7,8 +7,8 @@
  * silent change to a payload this Worker owns.
  */
 
-import type { Env } from "../../env";
-import { TIME_ZONE } from "../../lib/http";
+import { fetchOk, TIME_ZONE } from "../../lib/http";
+import { isNumber, isRecord } from "../../lib/narrow";
 
 export interface KoitoStats {
   listen_count: number;
@@ -43,7 +43,6 @@ export interface KoitoData {
   listens: KoitoListen[];
 }
 
-const TIMEOUT_MS = 10_000;
 const STAT_KEYS = [
   "listen_count",
   "track_count",
@@ -55,17 +54,10 @@ const STAT_KEYS = [
   "longest_streak",
 ] as const;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-const isNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
 async function get(env: Env, path: string): Promise<unknown> {
-  const response = await fetch(new URL(`/apis/web/v1/${path}`, env.KOITO_URL), {
+  const response = await fetchOk(`Koito ${path}`, new URL(`/apis/web/v1/${path}`, env.KOITO_URL), {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`Koito answered ${response.status} for ${path}`);
   return response.json();
 }
 

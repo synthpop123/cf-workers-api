@@ -8,7 +8,7 @@ accounts and self-hosted apps, but bug reports and fixes are welcome.
 ```sh
 npm install
 cp .dev.vars.example .dev.vars
-npm run check      # wrangler types, Biome format check, tsc, vitest
+npm run check      # wrangler types, Biome format + lint, tsc, vitest
 ```
 
 `npm run check` is exactly what CI and the deploy build run; a pull request

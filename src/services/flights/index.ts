@@ -4,7 +4,7 @@
  * reaches the browser), served as the versioned, redacted view behind the
  * globe on lkwplus.com/misc.
  *
- * The scheduler recomposes it from AirTrail (index.ts), so a page load
+ * The scheduler recomposes it from AirTrail (schedule.ts), so a page load
  * never waits on the instance and an AirTrail outage keeps serving the
  * last good copy. `upcoming` flips at midnight Asia/Shanghai, which the
  * snapshot's day guard covers.

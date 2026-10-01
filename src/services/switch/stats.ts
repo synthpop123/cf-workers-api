@@ -1,9 +1,11 @@
 /**
- * Pure shaping for the `/api/site` payload. No bindings, no clock — every
+ * Pure shaping for the `/switch/site` payload. No bindings, no clock — every
  * function takes `today` so the same inputs always produce the same output.
  *
  * All minutes are the znma v2 unit and are never rescaled.
  */
+
+import { shiftDays } from "../../lib/http";
 
 export interface SiteActivity {
   date: string;
@@ -34,11 +36,6 @@ export interface SiteGame {
   totalMinutes: number;
   recentMinutes: number;
   lastPlayedDate: string | null;
-}
-
-export function shiftDays(iso: string, delta: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
 }
 
 /**

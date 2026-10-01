@@ -3,12 +3,11 @@
  * Controls (znma) API into D1 (`SWITCH_DB`) and served as the versioned
  * view behind lkwplus.com/misc. Artwork is mirrored into R2 at sync time.
  *
- * A sync runs daily on the scheduler (index.ts) and on demand through
+ * A sync runs daily on the scheduler (schedule.ts) and on demand through
  * `POST /switch/sync` (bearer `SWITCH_API_TOKEN`); both call the same
  * `runSync`, which ends by rewriting the snapshot.
  */
 
-import type { Env } from "../../env";
 import { isAuthorized, json } from "../../lib/http";
 import type { Route } from "../../lib/router";
 import type { Service } from "../../lib/service";

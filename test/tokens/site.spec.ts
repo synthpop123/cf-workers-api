@@ -111,7 +111,7 @@ function expectSiteContract(site: Record<string, any>): void {
       expect(typeof allowance.label).toBe("string");
       expect(typeof allowance.usedDollars).toBe("number");
       expect(typeof allowance.limitDollars).toBe("number");
-      expect(allowance.resetsAt === null || typeof allowance.resetsAt === "string").toBe(true);
+      expect(allowance.expiresAt === null || typeof allowance.expiresAt === "string").toBe(true);
     }
     expect(Array.isArray(plan.resetCredits), "quota.resetCredits").toBe(true);
     for (const credit of plan.resetCredits) {

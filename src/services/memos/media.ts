@@ -7,8 +7,9 @@
  *
  * The key is the attachment's id and the requested width. An attachment
  * never changes its file, so a key is copied once. The previous body
- * already names every copy that exists, so a copy found there is taken as
- * present without asking R2; only new attachments cost a fetch, and at
+ * already links every copy that exists (`linkedKeys`), so a copy found
+ * there is taken as present without asking R2; only new attachments cost a
+ * fetch, and at
  * most `MAX_NEW` of them per run, so a burst of posts cannot spend the
  * invocation's subrequests. One that waits keeps Mastodon's own file for
  * now (the instance is self-hosted, so that is no one else's CDN) and is
@@ -18,7 +19,6 @@
  * Images binding transforms stills only.
  */
 
-import type { Env } from "../../env";
 import { mirrorImage, publicUrl } from "../../lib/images";
 import type { Attachment, Status } from "./mastodon";
 
@@ -56,13 +56,13 @@ export function plan(env: Env, attachment: Attachment): Planned[] {
 
 /**
  * The stored copies of every photo in `statuses`, by attachment id.
- * `previous` is the body last stored, whose URLs stand for copies that
- * already exist. An attachment missing from the map has no copies yet.
+ * `known` holds the keys the last stored body links, copies that already
+ * exist. An attachment missing from the map has no copies yet.
  */
 export async function mirrorMedia(
   env: Env,
   statuses: Status[],
-  previous: string | null
+  known: ReadonlySet<string>
 ): Promise<Map<string, Rendition[]>> {
   const mirrored = new Map<string, Rendition[]>();
   let budget = MAX_NEW;
@@ -70,9 +70,7 @@ export async function mirrorMedia(
     const copies = plan(env, attachment);
     if (copies.length === 0) continue;
     const renditions = copies.map(({ url, width }) => ({ url, width }));
-    // A URL is unique to its attachment and width, and the previous body
-    // only names copies that were stored.
-    if (previous && copies.every(({ url }) => previous.includes(url))) {
+    if (copies.every(({ key }) => known.has(key))) {
       mirrored.set(attachment.id, renditions);
       continue;
     }

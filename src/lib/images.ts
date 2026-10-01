@@ -18,15 +18,20 @@
  * give it a `.webp` extension and the size — so a change of size is a new
  * key, never new bytes under an old one.
  *
+ * A copy is made once, so most compositions only need to know it is
+ * there. Each caller knows that without asking R2 — the switch catalog
+ * keeps its keys in D1, and the other views' last stored bodies link
+ * every copy they made (`linkedKeys`) — and passes the keys it knows as
+ * `known`; only a key outside them costs an R2 lookup.
+ *
  * Nothing here may fail a composition: a copy that doesn't happen reports
  * `failed` and the payload simply omits that image. Nothing partial is
  * stored either, so the next composition tries again.
  */
 
-import type { Env } from "../env";
+import { fetchUpstream } from "./http";
 
 const CACHE_CONTROL = "public, max-age=31536000, immutable";
-const TIMEOUT_MS = 10_000;
 const FORMAT = "image/webp";
 const QUALITY = 80;
 
@@ -41,16 +46,19 @@ export type Size =
   | { width: number; height: number; fit?: "cover" }
   | { width: number; fit: "scale-down" };
 
-/** Ensure `key` holds the image at `source`, shrunk to `size` as WebP. */
+/** Ensure `key` holds the image at `source`, shrunk to `size` as WebP.
+ *  A key in `known` is taken as stored without asking R2. */
 export async function mirrorImage(
   env: Env,
   key: string,
   source: string,
-  size: Size
+  size: Size,
+  known?: ReadonlySet<string>
 ): Promise<Mirrored> {
+  if (known?.has(key)) return "present";
   try {
     if (await env.IMAGES.head(key)) return "present";
-    const response = await fetch(source, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const response = await fetchUpstream(source);
     if (!response.ok || !response.body) return "failed";
     const result = await env.IMAGE_TRANSFORM.input(response.body)
       .transform({ fit: "cover", ...size })
@@ -65,7 +73,27 @@ export async function mirrorImage(
   }
 }
 
+/** Where the bucket is served, with one trailing slash. */
+const baseUrl = (env: Env) => `${env.IMAGE_BASE_URL.replace(/\/$/, "")}/`;
+
+/** The characters a key is made of; it ends where a URL in JSON does. */
+const KEY_RE = /[\w./-]+/y;
+
+/** Every mirrored key a stored body links to. A body only links copies
+ *  that were stored, so these exist. */
+export function linkedKeys(env: Env, text: string | null | undefined): Set<string> {
+  const keys = new Set<string>();
+  if (!text) return keys;
+  const base = baseUrl(env);
+  for (let at = text.indexOf(base); at !== -1; at = text.indexOf(base, at)) {
+    KEY_RE.lastIndex = at += base.length;
+    const key = KEY_RE.exec(text)?.[0];
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
 /** Public URL for a mirrored object, or null when nothing was mirrored. */
 export function publicUrl(env: Env, key: string | null): string | null {
-  return key ? `${env.IMAGE_BASE_URL.replace(/\/$/, "")}/${key}` : null;
+  return key ? `${baseUrl(env)}${key}` : null;
 }

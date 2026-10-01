@@ -73,18 +73,23 @@ production.
   it to what the page draws, with room for dense screens, as WebP
   (posters 320×480, Switch covers 128×128; memo photos are scaled down
   to 640 and 1600 wide instead, ratio kept); the size is part of the key,
-  so resizing means new keys, never new bytes under old ones. A failed
-  mirror (fetch or transform) stores nothing and omits the image; it
-  never fails a composition or a sync.
+  so resizing means new keys, never new bytes under old ones. A copy
+  the caller already knows is stored — switch's keys in D1, or a key the
+  view's last stored body links (`linkedKeys`) — is passed as `known` and
+  costs no R2 lookup. A failed mirror (fetch or transform) stores nothing
+  and omits the image; it never fails a composition or a sync.
 
 ## Rules that hold everywhere
 
-- Verify with `npm run check` (wrangler types + Biome format check +
-  `tsc -p test` over src and tests + `vitest run` inside workerd via
+- Verify with `npm run check` (wrangler types + `biome check` — format
+  and the recommended lint rules, warnings fatal, tests exempt from
+  `noNonNullAssertion`/`noExplicitAny` + `tsc -p test` (TypeScript 7)
+  over src and tests + `vitest run` inside workerd via
   `@cloudflare/vitest-pool-workers`, against real miniflare-backed
   D1/KV/R2). GitHub Actions runs the same gate. `npm run format` fixes
-  formatting (Biome, format-only). The compatibility date cannot be newer than the workerd bundled
-  with the test pool supports — bump the pool first.
+  formatting. The compatibility date cannot be newer than the workerd
+  bundled with the test pool supports — bump the pool first. Vitest stays
+  on 4 until the pool's peer range allows 5.
 - Bindings, vars **and secrets** come from `wrangler.jsonc` through
   `wrangler types` (secrets via `secrets.required`), so `Env` is
   `Cloudflare.Env` and nothing hand-maintains a binding list. Config is
@@ -92,6 +97,10 @@ production.
   with `npx wrangler secret put <NAME>` and survive deploys; locally they
   live in the gitignored `.dev.vars`, and tests bind fakes in
   `vitest.config.mts`. They never appear in the repo, a response or a log.
+- Every outbound request goes through `fetchUpstream` / `fetchOk`
+  (`lib/http.ts`), which bound it with the upstream timeout: a hung host
+  must cost a failed run, not the invocation. Narrowers share their type
+  tests from `lib/narrow.ts`.
 - Every public body is built **field by field** from a hand-narrowed
   upstream slice. An upstream rename must become a failed composition (or
   a `400` on a write), never a silent contract change — and the narrowing
@@ -148,16 +157,22 @@ production.
   provider is declared — id, vendor, label and narrower together, read by
   both the route and the composer (an upstream rename must become a 400,
   never a silent contract change — and that is where account identity is
-  dropped, since `/tokens/site` is public); **one KV
-  key per provider** (`tokens:quota:<provider>`), never one shared snapshot,
-  because the legs use different credentials and must fail
-  independently; no D1, because a percentage a collector can re-fetch is
-  not history; and `capturedAt` is **per plan**, from the server clock,
-  always shipped — two collectors on their own timers are two different
-  answers to "how old is this". `refreshSiteCache(env, plan)` persists
-  and recomposes in one call: KV is eventually consistent, so never
-  write a plan and then read it back to compose the payload. `wipeQuota`
-  is the full-wipe path.
+  dropped, since `/tokens/site` is public); **one row per provider**
+  in D1's `quota_plans` (the latest report, overwritten in place — not
+  history), never one shared snapshot, because the legs use different
+  credentials and must fail independently; **not KV**, because a KV key
+  made every report two KV writes (plan + view), ~190 a day against the
+  account's 1,000 — more than every submission put together — and D1
+  reads its own writes, so the view composed right after sees the plan;
+  and `capturedAt` is **per plan**, from the server clock, always
+  shipped — two collectors on their own timers are two different
+  answers to "how old is this". The composer reads the plans in the same
+  D1 batch as the usage matrix, and the full wipe deletes them with the
+  other tables.
+- Claude's cloud session credits are an **allowance with `expiresAt`**,
+  not a window: a one-off grant whose unspent remainder lapses, not a
+  quota that refills. Anthropic names the field `resets_at`; the narrower
+  publishes it as `expiresAt` and the page says "expires".
 - On that host (install and supervision: `docs/tokens-reporters.md`) the
   `agent` user runs **three** units, not two: the two quota timers
   above, plus a long-lived `tokens-serve.service` that submits this

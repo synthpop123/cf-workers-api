@@ -7,7 +7,6 @@
  * response carries (the CORS set, `nosniff`).
  */
 
-import type { Env } from "../env";
 import { CORS_HEADERS, json } from "./http";
 
 const COMMON_HEADERS: Readonly<Record<string, string>> = {

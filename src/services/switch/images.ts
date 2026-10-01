@@ -3,15 +3,14 @@
  * never points at their CDN.
  *
  * Covers are content-addressed upstream (`…/i/c/<hash>_<size>`), so the
- * hash is the key and a cover is copied once. Matching keys already stored
- * in D1 skip the R2 existence check as well. The 256px medium cover is
+ * hash is the key and a cover is copied once. Keys already stored in D1
+ * skip the R2 existence check as well. The 256px medium cover is
  * stored at 128×128 WebP (lib/images.ts): the page draws it at 44px.
  *
  * Nothing here is allowed to fail a sync: a mirror that doesn't happen leaves
  * the row's key NULL and the payload simply omits the image.
  */
 
-import type { Env } from "../../env";
 import { mirrorImage, type Size } from "../../lib/images";
 import type { ImageUri } from "./moon/types";
 
@@ -34,15 +33,14 @@ function coverName(url: string): string | null {
 export async function mirrorCover(
   env: Env,
   imageUrl: string | null,
-  knownKey?: string | null
+  known?: ReadonlySet<string>
 ): Promise<{ key: string | null; copied: boolean }> {
   if (!imageUrl) return { key: null, copied: false };
   const name = coverName(imageUrl);
   if (!name) return { key: null, copied: false };
 
   const key = `${PREFIX}/games/${name}-${STORED.width}.webp`;
-  if (knownKey === key) return { key, copied: false };
-  const result = await mirrorImage(env, key, imageUrl, STORED);
+  const result = await mirrorImage(env, key, imageUrl, STORED, known);
   return result === "failed" ? { key: null, copied: false } : { key, copied: result === "copied" };
 }
 

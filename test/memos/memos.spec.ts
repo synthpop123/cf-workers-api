@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { memosSite } from "../../src/services/memos";
 import { composeSite, toMedia } from "../../src/services/memos/compose";
 import { narrowStatus, plainText } from "../../src/services/memos/mastodon";
+import { linkedKeys } from "../../src/lib/images";
 import { MAX_NEW, mirrorMedia, plan } from "../../src/services/memos/media";
 import { call, captureErrors, imageResponse } from "../helpers";
 
@@ -136,7 +137,7 @@ describe("mirrorMedia", () => {
     const photos = Array.from({ length: MAX_NEW + 2 }, (_, i) => photo(String(100 + i)));
     const statuses = [narrowStatus(status({ media_attachments: photos }))];
 
-    const first = await mirrorMedia(env, statuses, null);
+    const first = await mirrorMedia(env, statuses, new Set());
     expect(first.size).toBe(MAX_NEW);
     expect(fetched).toHaveBeenCalledTimes(MAX_NEW * 2);
     const object = await env.IMAGES.get("memos/media/100-640.webp");
@@ -144,7 +145,7 @@ describe("mirrorMedia", () => {
 
     fetched.mockClear();
     const previous = JSON.stringify(composeSite("p", statuses, first));
-    const second = await mirrorMedia(env, statuses, previous);
+    const second = await mirrorMedia(env, statuses, linkedKeys(env, previous));
     expect(second.size).toBe(MAX_NEW + 2);
     expect(fetched).toHaveBeenCalledTimes(2 * 2);
   });

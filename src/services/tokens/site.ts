@@ -22,22 +22,21 @@
  * breakdown. Active days count messages too: early-2025 Cursor logs carry
  * message counts but no token usage, and those days really were active.
  *
- * Composition is one D1 batch of three statements bounded as of today
- * (composeSiteBody), aggregated into all five ranges in JS; the result
- * is served as a KV snapshot (lib/snapshot.ts), rewritten by every
- * accepted submission and quota report.
+ * Composition is one D1 batch — three usage statements bounded as of
+ * today plus the quota plans (composeSiteBody) — aggregated into all four
+ * ranges in JS; the result is served as a KV snapshot (lib/snapshot.ts),
+ * rewritten by every accepted submission and quota report.
  *
- * One field does not come from D1 at all: `quota`, the subscription
- * plan's rate-limit snapshot, is *reported* by a collector (quota.ts)
- * and carried through from its own KV key. Everything else in the body
- * is derived from the usage matrix and can be recomputed from it; this
- * one cannot, which is why it is stored rather than aggregated — and
- * why it ships with the `capturedAt` that dates it.
+ * One field is not derived from the usage matrix: `quota`, each
+ * subscription plan's rate-limit snapshot, is *reported* by a collector
+ * (quota.ts) and carried through from its `quota_plans` row. Everything
+ * else in the body can be recomputed from the matrix; this one cannot,
+ * which is why it is stored rather than aggregated — and why each plan
+ * ships with the `capturedAt` that dates it.
  */
 
-import type { Env } from "../../env";
-import { isoToday } from "../../lib/http";
-import { store, type Snapshot } from "../../lib/snapshot";
+import { isoToday, shiftDays } from "../../lib/http";
+import type { Snapshot } from "../../lib/snapshot";
 import {
   METRICS_SQL,
   TOKENS_SQL,
@@ -56,34 +55,13 @@ import { QUOTA_PROVIDERS, type QuotaPlan } from "./quota-registry";
 // shape or semantics change, in lockstep with the homepage's
 // SITE_SCHEMA_VERSION and its committed fixture (homepage:
 // src/lib/client/tokens/schema.ts + contract.test.ts).
-export const SITE_VERSION = 15;
-/** Per-PoP staleness cap on the quota reads (30 s is the API minimum). */
-const KV_CACHE_TTL = 30;
+export const SITE_VERSION = 16;
 /** How recently a device must have reported to count as online: the
  *  CLI's 30-minute cadence plus slack for a late run and KV propagation.
  *  Shipped in the payload rather than hard-coded by each reader, and as
  *  a duration rather than a verdict: the readers compare `lastSeen` to
  *  their own clock, so a cached payload keeps aging correctly. */
 export const DEVICE_ONLINE_WITHIN_MS = 45 * 60_000;
-
-/**
- * Subscription quota is *reported*, not derived: no D1 table backs it,
- * because a percentage a collector can re-fetch in a second is not
- * history worth storing — one key per plan, overwritten in place,
- * constant in size forever. That is the same bound every other leg of
- * the fan-out carries, reached by never accumulating in the first place.
- *
- * **One key per provider, not one key for all of them.** Each plan is
- * read from a different vendor through a different credential, so they
- * fail independently: Codex goes through the tokens CLI, Claude through
- * an OAuth token this Worker never sees. A single overwritten snapshot
- * would make them a package deal — an expired Claude credential would
- * take the Codex card down with it on the next report, and a collector
- * would have to succeed at everything to say anything. Separate keys
- * mean a broken leg goes stale alone, visibly, which is what
- * `capturedAt` is for.
- */
-export const quotaKey = (provider: string) => `tokens:quota:${provider}`;
 
 const RANGES = [
   { key: "week", days: 7 },
@@ -152,13 +130,6 @@ interface SiteDay {
   active?: number;
   providers: Record<string, DaySlice>;
   clients: Record<string, DayClient>;
-}
-
-/** Shift an ISO day by whole days; anchoring at noon UTC is DST-proof. */
-function shiftDays(day: string, delta: number): string {
-  const date = new Date(`${day}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + delta);
-  return date.toISOString().slice(0, 10);
 }
 
 /** A breakdown entry accumulates its distinct active dates, serialized as
@@ -289,43 +260,20 @@ class RangeAgg {
 }
 
 /**
- * Every stored plan, in a stable order so an unchanged payload hashes to
- * an unchanged ETag. A caller that just wrote one passes it in: KV is
- * eventually consistent, so a write followed by its own read can still
- * answer with the previous value, and the moment the number matters most
- * is the moment it changed.
+ * Every reported plan of a registered provider, in registry order so an
+ * unchanged payload hashes to an unchanged ETag. Each body was narrowed
+ * before it was stored (quota.ts), so it ships as it is.
  */
-async function readQuota(env: Env, fresh?: QuotaPlan): Promise<QuotaPlan[]> {
-  const ids = [...QUOTA_PROVIDERS.values()].map(({ provider }) => provider);
-  const stored = await Promise.all(
-    ids.map((provider) =>
-      env.CACHE.get<QuotaPlan>(quotaKey(provider), {
-        type: "json",
-        cacheTtl: KV_CACHE_TTL,
-      })
-    )
-  );
-  const plans = stored.filter((plan): plan is QuotaPlan => plan !== null);
-  if (fresh) {
-    const at = plans.findIndex(({ provider }) => provider === fresh.provider);
-    if (at === -1) plans.push(fresh);
-    else plans[at] = fresh;
-  }
-  return plans.sort((a, b) => ids.indexOf(a.provider) - ids.indexOf(b.provider));
+function quotaPlans(rows: { body: string }[]): QuotaPlan[] {
+  const order = [...QUOTA_PROVIDERS.values()].map(({ provider }) => provider);
+  return rows
+    .map(({ body }) => JSON.parse(body) as QuotaPlan)
+    .filter(({ provider }) => order.includes(provider))
+    .sort((a, b) => order.indexOf(a.provider) - order.indexOf(b.provider));
 }
 
-/**
- * `quota` is the freshly reported plan, when the caller is the endpoint
- * that just stored one — see readQuota.
- */
-export async function composeSiteBody(
-  env: Env,
-  today = isoToday(),
-  quota?: QuotaPlan
-): Promise<string> {
-  const quotaPlans = await readQuota(env, quota);
-
-  // `u.date <= ?1` on all three statements is the one place the payload
+export async function composeSiteBody(env: Env, today = isoToday()): Promise<string> {
+  // `u.date <= ?1` on the three usage statements is the one place the payload
   // is bounded as of today, so ranges, the daily series and the device
   // inventory agree by construction. Submissions may legitimately carry
   // dates up to two days ahead (payload.ts keeps the official clock-skew
@@ -338,7 +286,7 @@ export async function composeSiteBody(
   // the device join the bound belongs in the ON clause — a WHERE would
   // turn the LEFT JOIN inner and drop devices that have only reported
   // future-dated rows.
-  const [usage, activity, deviceRows] = await env.TOKENS_DB.batch([
+  const [usage, activity, deviceRows, quota] = await env.TOKENS_DB.batch([
     env.TOKENS_DB.prepare(
       `SELECT u.date, u.client, u.model, u.provider, ${METRICS_SQL}
        FROM daily_usage u
@@ -365,6 +313,7 @@ export async function composeSiteBody(
               ON u.device_id = d.id AND u.date <= ?1
        GROUP BY d.id ORDER BY d.last_seen DESC`
     ).bind(today),
+    env.TOKENS_DB.prepare(`SELECT body FROM quota_plans`),
   ]);
 
   const aggs = RANGES.map(({ days }) => new RangeAgg(days ? shiftDays(today, 1 - days) : null));
@@ -454,7 +403,7 @@ export async function composeSiteBody(
       deviceOnlineWithinMs: DEVICE_ONLINE_WITHIN_MS,
       generatedAt: new Date().toISOString(),
       today,
-      quota: quotaPlans,
+      quota: quotaPlans(quota.results as unknown as { body: string }[]),
       ranges,
       daily: [...daily.values()].sort((a, b) => (a.date < b.date ? -1 : 1)),
       devices,
@@ -474,37 +423,13 @@ function roundCost(key: string, value: unknown): unknown {
   return key === "cost" && typeof value === "number" ? Math.round(value * 1e6) / 1e6 : value;
 }
 
-/** The tokens view, served at `GET /tokens/site` (lib/snapshot.ts). */
+/**
+ * The tokens view, served at `GET /tokens/site` (lib/snapshot.ts) and
+ * refreshed by its write events — every accepted submission, quota
+ * report and wipe — rather than by the scheduler.
+ */
 export const tokensSite: Snapshot = {
   key: "tokens:site",
   version: SITE_VERSION,
-  compose: (env, today) => composeSiteBody(env, today),
+  compose: composeSiteBody,
 };
-
-/**
- * Drop every stored plan. Quota is reported data like any other, and it
- * names the account's subscription, so the full wipe takes it along.
- */
-export async function wipeQuota(env: Env): Promise<void> {
-  await Promise.all(
-    [...QUOTA_PROVIDERS.values()].map(({ provider }) => env.CACHE.delete(quotaKey(provider)))
-  );
-}
-
-/**
- * Recompute the site payload and store it — the write every accepted
- * submission and quota report ends with.
- *
- * Passing a quota plan persists it in the same call and composes the
- * payload from that same in-memory value, so the collector's write and
- * the view it appears in cannot disagree (KV is eventually consistent:
- * writing the plan and reading it back could still see the old one).
- * Without it the stored plans are read back and carried through
- * unchanged — a submission must never drop a quota card just because it
- * had nothing to say about quota.
- */
-export async function refreshSiteCache(env: Env, quota?: QuotaPlan): Promise<void> {
-  if (quota) await env.CACHE.put(quotaKey(quota.provider), JSON.stringify(quota));
-  const today = isoToday();
-  await store(env, tokensSite, await composeSiteBody(env, today, quota), today);
-}

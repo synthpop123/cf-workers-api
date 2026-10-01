@@ -6,7 +6,7 @@
  * into a shape this Worker owns, so the fields it is supposed to drop
  * are asserted absent by name — account identity above all, since
  * /tokens/site is public and unauthenticated. The two plans are stored
- * under their own keys, so one collector failing must not disturb the
+ * in their own rows, so one collector failing must not disturb the
  * other's card. And a plan has to survive the writes that know nothing
  * about it: an ordinary submission recomposes the payload and must carry
  * every card through, while a full wipe takes them all.
@@ -27,6 +27,9 @@ import {
 
 beforeEach(() => reset());
 
+const storedPlans = async () =>
+  (await env.TOKENS_DB.prepare(`SELECT provider FROM quota_plans ORDER BY provider`).all()).results;
+
 const site = async () => (await (await call("/tokens/site")).json()) as Record<string, any>;
 const planOf = async (provider: string) =>
   (await site()).quota.find((plan: any) => plan.provider === provider);
@@ -36,7 +39,7 @@ describe("POST /tokens/quota/codex", () => {
     const response = await call("/tokens/quota/codex", { method: "POST", body: "{}" });
     expect(response.status).toBe(401);
     // Rejected before the body is even read.
-    expect(await env.CACHE.get("tokens:quota:openai")).toBeNull();
+    expect(await storedPlans()).toEqual([]);
   });
 
   it("narrows the CLI snapshot into the payload's own shape", async () => {
@@ -181,7 +184,7 @@ describe("POST /tokens/quota/claude", () => {
           label: "Cloud session credits",
           usedDollars: 25.5,
           limitDollars: 100,
-          resetsAt: "2026-11-05T07:59:00.000Z",
+          expiresAt: "2026-11-05T07:59:00.000Z",
         },
       ],
       // Claude has no manual-reset credits; the list is empty, not absent.
@@ -300,7 +303,7 @@ describe("a plan's life beside the usage matrix", () => {
   it("survives a day rollover recompose", async () => {
     await reportQuota();
     // What the snapshot read path does when the cached payload was composed on an
-    // earlier calendar day: recompose inline, reading quota back from KV.
+    // earlier calendar day: recompose inline, reading quota back from D1.
     await env.CACHE.delete("tokens:site");
     expect((await planOf("openai")).plan).toBe("Team");
   });
@@ -321,8 +324,7 @@ describe("a plan's life beside the usage matrix", () => {
       headers: AUTH,
     });
     expect(response.status).toBe(200);
-    expect(await env.CACHE.get("tokens:quota:openai")).toBeNull();
-    expect(await env.CACHE.get("tokens:quota:anthropic")).toBeNull();
+    expect(await storedPlans()).toEqual([]);
     expect((await site()).quota).toEqual([]);
   });
 });

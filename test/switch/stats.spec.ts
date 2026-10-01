@@ -3,7 +3,6 @@ import {
   buildLibrary,
   computeStats,
   denseActivity,
-  shiftDays,
   type GameRow,
 } from "../../src/services/switch/stats";
 
@@ -145,12 +144,5 @@ describe("buildLibrary", () => {
       valueCny: null,
       pricedCount: 0,
     });
-  });
-});
-
-describe("shiftDays", () => {
-  it("crosses month and year boundaries", () => {
-    expect(shiftDays("2026-08-31", 1)).toBe("2026-09-01");
-    expect(shiftDays("2026-01-01", -1)).toBe("2025-12-31");
   });
 });

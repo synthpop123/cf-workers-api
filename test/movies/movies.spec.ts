@@ -46,6 +46,10 @@ describe("parseFeed", () => {
 
   it("decodes named and numeric references", () => {
     expect(decodeXml("&lt;&#233;&#xE9;&amp;amp;&gt;")).toBe("<éé&amp;>");
+    // Names off Object.prototype and code points past U+10FFFF stay as written.
+    expect(decodeXml("&constructor;&toString;&#x110000;")).toBe(
+      "&constructor;&toString;&#x110000;"
+    );
   });
 });
 

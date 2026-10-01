@@ -7,7 +7,8 @@
  * visibility, the attachment ids' blurhashes) is never typed.
  */
 
-const TIMEOUT_MS = 10_000;
+import { fetchOk } from "../../lib/http";
+import { isRecord } from "../../lib/narrow";
 
 export interface Emoji {
   shortcode: string;
@@ -38,9 +39,6 @@ export interface Status {
   emojis: Emoji[];
   media: Attachment[];
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isHttp = (value: unknown): value is string =>
   typeof value === "string" && /^https?:\/\//.test(value);
@@ -143,11 +141,7 @@ export async function fetchStatuses(
 ): Promise<Status[]> {
   const url = new URL(`/api/v1/accounts/${encodeURIComponent(account)}/statuses`, instance);
   url.search = `exclude_replies=true&exclude_reblogs=true&limit=${limit}`;
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`Mastodon answered ${response.status}`);
+  const response = await fetchOk("Mastodon", url, { headers: { Accept: "application/json" } });
   const body: unknown = await response.json();
   if (!Array.isArray(body)) throw new Error("Mastodon statuses is not a list");
   return body.map(narrowStatus);

@@ -1,7 +1,7 @@
 /**
  * The HTTP vocabulary every service speaks: the calendar, the JSON
- * response, the bearer check, conditional requests and the one CORS
- * header set.
+ * response, the bearer check, conditional requests, the one CORS header
+ * set and the way an upstream is asked.
  */
 
 /** All dates in the system are calendar days in this zone — the one the
@@ -20,6 +20,34 @@ const isoDayFormat = new Intl.DateTimeFormat("en-CA", {
 /** Today (or `now`'s day) as YYYY-MM-DD in TIME_ZONE. */
 export function isoToday(now = new Date()): string {
   return isoDayFormat.format(now);
+}
+
+/** Shift a YYYY-MM-DD day by whole days. Pure calendar arithmetic in
+ *  UTC, so no zone's DST can skip or repeat a day. */
+export function shiftDays(day: string, delta: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+
+/** How long any upstream gets to answer. A scheduled job or a sync that
+ *  waits on a hung host spends its invocation doing nothing. */
+const UPSTREAM_TIMEOUT_MS = 10_000;
+
+/** `fetch`, bounded by the upstream timeout unless the caller brings its
+ *  own signal. Every outbound request goes through here. */
+export function fetchUpstream(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, { ...init, signal: init.signal ?? AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+}
+
+/** `fetchUpstream` that rejects on a non-2xx answer, naming the upstream. */
+export async function fetchOk(
+  name: string,
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const response = await fetchUpstream(input, init);
+  if (!response.ok) throw new Error(`${name} answered ${response.status}`);
+  return response;
 }
 
 /**
@@ -66,11 +94,7 @@ export async function isAuthorized(request: Request, secret: string | undefined)
     crypto.subtle.digest("SHA-256", enc.encode(match[1])),
     crypto.subtle.digest("SHA-256", enc.encode(secret)),
   ]);
-  // Cloudflare-specific extension, absent from lib.dom's SubtleCrypto type.
-  const subtle = crypto.subtle as SubtleCrypto & {
-    timingSafeEqual(a: ArrayBuffer, b: ArrayBuffer): boolean;
-  };
-  return subtle.timingSafeEqual(a, b);
+  return crypto.subtle.timingSafeEqual(a, b);
 }
 
 /** Strong ETag — SHA-256 of the text, quoted per RFC 9110. */
@@ -88,5 +112,5 @@ export async function etagOf(text: string): Promise<string> {
  */
 export function etagMatches(request: Request, etag: string): boolean {
   const inm = request.headers.get("If-None-Match");
-  return inm !== null && inm.split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag);
+  return inm?.split(",").some((tag) => tag.trim().replace(/^W\//, "") === etag) ?? false;
 }

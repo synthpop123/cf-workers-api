@@ -664,7 +664,7 @@
         <tr><td><code>/music</code></td><td>self-hosted Koito</td><td>snapshot only</td><td>every 5 min</td></tr>
         <tr><td><code>/movies</code></td><td>Letterboxd RSS</td><td>R2 <code>imagebed</code> (posters)</td><td>every 3 hours</td></tr>
         <tr><td><code>/memos</code></td><td>self-hosted Mastodon</td><td>R2 <code>imagebed</code> (photos)</td><td>every 5 min</td></tr>
-        <tr><td><code>/now</code></td><td>the stored music, movies, tokens and flights views</td><td>snapshot only</td><td>every 5 min, after music and memos</td></tr>
+        <tr><td><code>/now</code></td><td>the stored music, movies, tokens and flights views</td><td>snapshot only</td><td>every 5 min, right after music</td></tr>
       </tbody>
     </table>
   </section>
@@ -699,7 +699,7 @@
       </p>
       <p class="cap">
         A five-minute heartbeat recomposes the snapshots that read an upstream, each on its own
-        cadence — music and memos every 5 minutes and the home page's Now right after them, movies every 3 hours, flights hourly — and a
+        cadence — music and memos every 5 minutes and the home page's Now right after music, movies every 3 hours, flights hourly — and a
         composition whose bytes did not move writes nothing. The Switch sync runs on its own daily
         trigger, with its own CPU and subrequest budget. Third-party artwork is copied into R2 once,
         keyed by content.
@@ -897,7 +897,7 @@ curl -H 'If-None-Match: "&lt;etag&gt;"' -i "https://api.lkwplus.com/tokens/site"
           <svg class="ic-check" aria-hidden="true"><use href="#i-check"/></svg>
         </button>
         <div class="ep-body">
-          <p>A Codex quota report from the collecting host (<code>POST /tokens/quota/claude</code> likewise). Each plan lands in its own key with its own <code>capturedAt</code>.</p>
+          <p>A Codex quota report from the collecting host (<code>POST /tokens/quota/claude</code> likewise). Each plan lands in its own D1 row with its own <code>capturedAt</code>.</p>
         </div>
       </li>
       <li class="ep">

@@ -5,7 +5,6 @@
  *   GET    /tokens/api/auth/token             (tokens login --token)
  */
 
-import type { Env } from "../../env";
 import { json, isAuthorized } from "../../lib/http";
 import { ACTIVE_DAYS_SQL, TOKENS_SQL } from "./metrics";
 import type { SubmissionPayload } from "./payload";
@@ -27,7 +26,8 @@ import {
   mergeDay,
   modelKey,
 } from "./merge";
-import { refreshSiteCache, wipeQuota } from "./site";
+import { refresh } from "../../lib/snapshot";
+import { tokensSite } from "./site";
 import { ensureDailyBackup, wipeArchive } from "./backup";
 
 interface StoredUsageRow {
@@ -459,7 +459,7 @@ export async function handleSubmit(
   // Submissions are the only event that changes the data, so they drive
   // the KV site payload and the daily R2 export directly — devices report
   // every 30 minutes, so neither needs a scheduled job.
-  ctx.waitUntil(refreshSiteCache(env));
+  ctx.waitUntil(refresh(env, tokensSite));
   ctx.waitUntil(ensureDailyBackup(env));
 
   return json({
@@ -482,10 +482,10 @@ export async function handleAuthToken(request: Request, env: Env): Promise<Respo
 
 /**
  * DELETE /tokens/api/settings/submitted-data — wipe everything for this account,
- * across all three stores: the four D1 tables, every R2 object (raw
- * payload archives and daily exports reproduce submitted data, so they
- * go too), the reported quota snapshot, and the precomposed KV site
- * payload, which is recomposed synchronously so the public dashboard
+ * across all three stores: the five D1 tables (the reported quota plans
+ * name the account's subscriptions, so they go too), every R2 object
+ * (raw payload archives and daily exports reproduce submitted data), and
+ * the precomposed KV site payload, which is recomposed synchronously so the public dashboard
  * never serves deleted data after the CLI has been told the deletion
  * succeeded. Runs unconditionally, so a retry completes whatever a
  * failed earlier attempt left behind.
@@ -503,9 +503,9 @@ export async function handleDeleteSubmittedData(request: Request, env: Env): Pro
     env.TOKENS_DB.prepare(`DELETE FROM daily_activity`),
     env.TOKENS_DB.prepare(`DELETE FROM devices`),
     env.TOKENS_DB.prepare(`DELETE FROM submissions`),
+    env.TOKENS_DB.prepare(`DELETE FROM quota_plans`),
   ]);
   await wipeArchive(env);
-  await wipeQuota(env);
-  await refreshSiteCache(env);
+  await refresh(env, tokensSite);
   return json({ deleted: n > 0, deletedSubmissions: n });
 }

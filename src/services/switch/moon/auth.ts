@@ -1,3 +1,4 @@
+import { fetchUpstream } from "../../../lib/http";
 import { ZNMA_CLIENT_ID } from "./config";
 import type { NintendoAccountToken } from "./types";
 
@@ -13,7 +14,7 @@ const NA_TOKEN_URL = "https://accounts.nintendo.com/connect/1.0.0/api/token";
  * (coral) API, the Parental Controls API needs no request signing.
  */
 export async function fetchIdToken(sessionToken: string): Promise<string> {
-  const response = await fetch(NA_TOKEN_URL, {
+  const response = await fetchUpstream(NA_TOKEN_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
