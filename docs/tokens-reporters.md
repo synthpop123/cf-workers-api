@@ -73,9 +73,14 @@ install over the binary every submit fails with
 `cliVersion` never moves, because the old process reports its own version.
 
 ```sh
-launchctl kickstart -k gui/$(id -u)/tokens-serve    # macOS
+launchctl bootout gui/$(id -u)/tokens-serve         # macOS: reload, not
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/tokens-serve.plist
 systemctl --user restart tokens-serve.service       # Linux
 ```
+
+On macOS `kickstart -k` is not enough: the binary is ad-hoc signed and
+launchd keeps the old one's launch constraint, so the restart dies with
+`last exit reason = OS_REASON_CODESIGNING` until the agent is reloaded.
 
 The quota timers re-exec the binary on every run and pick a new version up
 on their own. `systemctl --user list-timers` does not list services, so use

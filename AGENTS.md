@@ -193,7 +193,8 @@ production.
   `tokens serve` restart above applies per host, under a different unit
   name on each: UbuntuPC's is `tokens.service`, running
   `~/.local/bin/tokens serve`. Grepping for `tokens-serve.service` misses
-  it.
+  it. MacbookPro's is the LaunchAgent `com.lkw123.tokens-serve`, which
+  must be reloaded, not kickstarted (`docs/tokens-reporters.md`).
 - **Cursor is account-wide and must be reported from one device only.**
   It has no local session log: each submit refreshes the whole account's
   usage into `<config>/cursor-cache/usage.json`, and the scanner reads
