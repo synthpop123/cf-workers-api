@@ -1,0 +1,11 @@
+[Unit]
+Description=refresh the Cursor usage cache that tokens serve reports from
+Documentation=https://github.com/synthpop123/cf-workers-api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The explicit sync gets a 120s budget; serve's implicit one gets 15s for
+# the whole paginated history, which it no longer fits in.
+ExecStart=%h/.local/bin/tokens cursor sync

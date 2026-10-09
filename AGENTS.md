@@ -207,6 +207,15 @@ production.
   check D1 instead: `SELECT date, COUNT(DISTINCT device_id) AS devices
   FROM daily_usage WHERE client = 'cursor' GROUP BY date HAVING devices > 1`
   must return nothing.
+- **OracleARM's `serve` never syncs Cursor; a 3-hour timer does.** The
+  implicit sync in every submit refetches the whole history under one
+  hard-coded 15 s budget, which ~6,000 events no longer fit, so it failed
+  silently onto a stale cache (a day of Cursor showing zero). `serve` runs
+  with `TOKENS_CONFIG_DIR=~/.config/tokens-serve` — symlinks back to
+  `~/.config/tokens` minus `cursor-credentials.json`, so no Cursor login —
+  and `tokens-cursor-sync.timer` runs the explicit `tokens cursor sync`
+  (120 s budget). Setup and checks: `docs/tokens-reporters.md`. Run
+  `tokens cursor login` without the override.
 - `report-claude-quota.py` is the one place this repo can destroy a
   credential: **Anthropic rotates the refresh token on every exchange**.
   It therefore refreshes only within 10 minutes of expiry, writes the

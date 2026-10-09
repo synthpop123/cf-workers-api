@@ -1,0 +1,15 @@
+[Unit]
+Description=refresh the Cursor usage cache every 3 hours
+
+[Timer]
+# Each run refetches the account's whole usage history (~13 pages of 500
+# events) from cursor.com's dashboard API. Eight a day keeps the IP and the
+# session well clear of anything that looks like scraping; the dashboard
+# lags Cursor by at most this interval.
+OnBootSec=5min
+OnUnitActiveSec=3h
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

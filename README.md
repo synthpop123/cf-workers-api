@@ -148,7 +148,7 @@ src/
   lib/              router, snapshot store, service type, image mirror, HTTP helpers
   env.ts            Env, generated from wrangler.jsonc
 migrations/         one directory per D1 database (append-only)
-scripts/tokens/     quota collectors and reporter unit files
+scripts/tokens/     quota collectors, reporter and Cursor-sync unit files
 docs/               operational guides
 public/             the service page at /
 test/               mirrors src/

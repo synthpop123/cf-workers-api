@@ -104,6 +104,67 @@ npx wrangler d1 execute tokens-usage --remote --command \
 
 It must return nothing.
 
+## Cursor: sync on a timer, not from `serve`
+
+Every submit first refreshes the Cursor cache by refetching the account's
+**whole** usage history from `cursor.com/api/dashboard/get-filtered-usage-events`,
+500 events a page, and the implicit sync inside `submit`/`serve` gets one
+hard-coded 15-second budget (`CURSOR_HTTP_TIMEOUT` in the CLI's `cursor.rs`,
+no env override) for all the pages together. The history only grows: at
+~6,000 events (October 2026) a fetch takes 15–21 s from OracleARM, so nearly
+every implicit sync died at exactly 15.0 s and the submit silently fell back
+to the stale `usage.json`. Cursor then showed nothing for a whole day while
+`serve` stayed green. The log names it, under three different messages
+depending on where the deadline hit:
+
+```
+Cursor sync failed; using cached data: …: error sending request for url (…)
+Cursor sync failed; using cached data: …: Failed to read the Cursor usage events JSON response
+Cursor sync failed; using cached data: …: Cursor usage events fetch exceeded its overall time budget …
+```
+
+The explicit `tokens cursor sync` gets 120 s. So on the machine that reports
+Cursor, `serve` never syncs and a timer does:
+
+- `serve` syncs only when it finds `cursor-credentials.json` in its config
+  dir, while the scanner reads `cursor-cache/` regardless. It therefore runs
+  with `TOKENS_CONFIG_DIR=~/.config/tokens-serve`, a sibling dir whose entries
+  are symlinks back to `~/.config/tokens` — everything except
+  `cursor-credentials.json`. Same device id, same cache, no Cursor login, no
+  requests to cursor.com.
+- `tokens-cursor-sync.timer` runs `tokens cursor sync` (default config dir,
+  where the login lives) every 3 hours. Dashboard Cursor numbers lag by at
+  most that; cursor.com sees ~8 full fetches a day instead of ~48 that mostly
+  failed half-way.
+
+```sh
+A=~/.config/tokens S=~/.config/tokens-serve
+install -d -m700 "$S"
+for f in credentials.json device.json settings.json cursor-cache cache; do ln -sfn "$A/$f" "$S/$f"; done
+TOKENS_CONFIG_DIR="$S" tokens status          # same device id as without it
+TOKENS_CONFIG_DIR="$S" tokens cursor status   # "No saved Cursor accounts."
+
+install -Dm644 scripts/tokens/tokens-serve-no-cursor-sync.conf \
+  ~/.config/systemd/user/tokens-serve.service.d/no-cursor-sync.conf
+install -Dm644 scripts/tokens/tokens-cursor-sync.{service,timer} -t ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now tokens-cursor-sync.timer
+systemctl --user restart tokens-serve.service
+```
+
+The units assume `~/.local/bin/tokens`; OracleARM's binary is
+`/usr/local/bin/tokens`, so its installed `tokens-cursor-sync.service` names
+that instead. Its serve unit's `[Service]` is otherwise as in
+`tokens-serve.service` plus `TOKENS_DEVICE_NAME` and `TZ`.
+
+To check it works: the serve log must no longer print `Syncing Cursor usage
+data...`, `journalctl --user -u tokens-cursor-sync` shows `Synced N Cursor
+usage event(s).` every 3 h, and `cursor-cache/usage.json`'s mtime moves with
+it. A new file under `~/.config/tokens` (a future CLI version may add one)
+needs its symlink too; `tokens status` under the override shows which paths
+it resolves. `tokens cursor login` must be run **without** the override, or
+`serve` would pick the login up and start syncing again.
+
 ## Quota collectors
 
 Subscription quota is account-wide, so exactly **one** machine reports it —
