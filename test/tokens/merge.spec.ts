@@ -241,6 +241,11 @@ describe("daysEqual", () => {
     expect(daysEqual(a, b)).toBe(true);
   });
 
+  it("treats a day never stored as equal to one that merges to nothing", () => {
+    expect(daysEqual(undefined, new Map())).toBe(true);
+    expect(daysEqual(new Map(), new Map())).toBe(true);
+  });
+
   it("detects real changes", () => {
     const b = base();
     b.get("cursor")!.models.get(modelKey("gpt-5", ""))!.input = 101;

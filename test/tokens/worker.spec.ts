@@ -118,6 +118,23 @@ describe("submit flow", () => {
     expect(audit).toEqual({ row_count: 0, changed_days: 0 });
   });
 
+  // The CLI sends a day whose rows it all excluded (cost-only Cursor rows)
+  // with no clients; nothing is stored for it, so it is never a change.
+  it("does not rewrite a day the CLI sends with no clients", async () => {
+    const payload = submissionPayload();
+    payload.contributions!.unshift({
+      date: "2026-07-17",
+      totals: { tokens: 0, cost: 0, messages: 0 },
+      clients: [],
+    });
+    await submit(payload);
+    await submit(payload);
+    const audit = await env.TOKENS_DB.prepare(
+      `SELECT row_count, changed_days FROM submissions ORDER BY received_at DESC, rowid DESC LIMIT 1`
+    ).first<{ row_count: number; changed_days: number }>();
+    expect(audit).toEqual({ row_count: 0, changed_days: 0 });
+  });
+
   // The audit log grows with report cadence, not with data — ~80 rows a
   // day, most of them no-ops — so every submission trims its own tail.
   it("keeps the audit log to a rolling window", async () => {

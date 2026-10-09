@@ -220,10 +220,15 @@ function costEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
+/**
+ * A day never stored equals one that merges to nothing: the CLI still sends
+ * a day whose every row it excluded (cost-only Cursor rows) as `clients: []`,
+ * and counting that as a change rewrote it on every resubmit.
+ */
 export function daysEqual(a: DayState | undefined, b: DayState): boolean {
-  if (!a || a.size !== b.size) return false;
+  if ((a?.size ?? 0) !== b.size) return false;
   for (const [client, bData] of b) {
-    const aData = a.get(client);
+    const aData = a?.get(client);
     if (!aData || aData.revision !== bData.revision) return false;
     if (aData.models.size !== bData.models.size) return false;
     for (const [key, bm] of bData.models) {
