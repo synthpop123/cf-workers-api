@@ -27,8 +27,13 @@ const CHART = [
 const holding = (symbol: string, allocation: number, assetClass = "EQUITY", sub = "STOCK") => ({
   allocationInPercentage: allocation,
   netPerformancePercentWithCurrencyEffect: 0.25,
+  // 123,456 shares at 8 bought for 740,736: a cost of 6 a share, and
+  // neither the count nor the sum may reach the body.
   quantity: 123_456,
-  valueInBaseCurrency: 888_888,
+  marketPrice: 8,
+  valueInBaseCurrency: 987_648,
+  investment: 740_736,
+  dateOfFirstActivity: "2026-01-02T00:00:00.000Z",
   assetProfile: {
     symbol,
     dataSource: "YAHOO",
@@ -36,6 +41,9 @@ const holding = (symbol: string, allocation: number, assetClass = "EQUITY", sub 
     currency: "USD",
     assetClass,
     assetSubClass: sub,
+    sectors: [{ name: "Technology", weight: 1 }],
+    countries: [{ code: "US", weight: 1 }],
+    url: sub === "STOCK" ? "https://www.example.com" : null,
   },
 });
 
@@ -113,7 +121,16 @@ describe("GET /stocks/site", () => {
     const response = await call("/stocks/site");
     expect(response.status).toBe(200);
     const text = await response.text();
-    for (const secret of ["777777", "999999", "123456", "888888", "3166", "43222", "0.0123"]) {
+    for (const secret of [
+      "777777",
+      "999999",
+      "123456",
+      "987648",
+      "740736",
+      "3166",
+      "43222",
+      "0.0123",
+    ]) {
       expect(text).not.toContain(secret);
     }
     const body = JSON.parse(text);
@@ -123,8 +140,8 @@ describe("GET /stocks/site", () => {
       index: [1, 1, 1.1],
       cash: [{ currency: "USD", weight: 0.1 }],
       holdings: [
-        { symbol: "MSFT", weight: 0.6, performance: 0.25 },
-        { symbol: "BOXX", weight: 0.3, performance: 0.25 },
+        { symbol: "MSFT", weight: 0.6, performance: 0.25, cost: 6, since: "2026-01-02" },
+        { symbol: "BOXX", weight: 0.3, performance: 0.25, cost: 6, since: "2026-01-02" },
       ],
     });
     const symbols = body.symbols as { symbol: string; logo: string | null; kind: string }[];
@@ -134,6 +151,13 @@ describe("GET /stocks/site", () => {
     ]);
     expect(symbols[0].logo).toBe("https://img.lkwplus.com/stocks/logos/MSFT-96.webp");
     expect(symbols[1].logo).toBeNull();
+    // A fund's sectors are a blend: none is named.
+    expect(body.symbols[0]).toMatchObject({
+      sector: "Technology",
+      country: "US",
+      url: "https://www.example.com",
+    });
+    expect(body.symbols[1]).toMatchObject({ sector: null, country: "US", url: null });
     expect(await env.IMAGES.head("stocks/logos/MSFT-96.webp")).not.toBeNull();
     // The portfolio and each account, once each.
     expect(asked.filter((path) => path.includes("/performance"))).toHaveLength(3);

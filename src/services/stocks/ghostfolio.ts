@@ -10,7 +10,9 @@
  * computed here from money amounts (`compose.ts`), which a restricted
  * grant would redact. So the amounts reach this file and stop at it: every
  * type below is the narrowed slice the composition reads, and the payload
- * is built from returns, weights and public prices only.
+ * is built from returns, weights, public prices and per-share prices paid
+ * (a holding's investment over its quantity, divided here, so neither
+ * leaves this file).
  *
  * Ghostfolio's own percentages (ROAI, ROI) are not read at all: neither
  * chains from day to day, so neither can be cut to a range or compared
@@ -59,6 +61,19 @@ export interface GfHolding {
    *  under the owner's chosen calculation (ROI, ROAI): realised and
    *  unrealised gain, dividends and fees, in the base currency. */
   performance: number | null;
+  /** Average price paid per share, in `currency`: what went in over the
+   *  shares held, converted at the rate the holding is valued at today.
+   *  A price, not an amount — without the quantity it says nothing of
+   *  how much is held. Null when Ghostfolio cannot say. */
+  cost: number | null;
+  /** The first activity in it (in the scope asked for), a calendar day. */
+  since: string | null;
+  /** A stock's sector; null for funds, whose sectors are a blend. */
+  sector: string | null;
+  /** ISO 3166 alpha-2 of the country it is mostly in, when one is. */
+  country: string | null;
+  /** The company's own site. */
+  url: string | null;
 }
 
 export interface GfCloses {
@@ -131,6 +146,9 @@ function narrowHoldings(body: unknown): GfHolding[] {
     }
     const subClass = textOrNull(profile.assetSubClass);
     return {
+      ...describe(profile, subClass),
+      cost: averageCost(holding),
+      since: day(holding.dateOfFirstActivity),
       symbol,
       dataSource,
       name: textOrNull(profile.name) ?? symbol,
@@ -143,6 +161,48 @@ function narrowHoldings(body: unknown): GfHolding[] {
         : null,
     };
   });
+}
+
+/** Investment per share in the quote currency: the base-currency
+ *  investment over the quantity, back through today's valuation rate. */
+function averageCost(holding: Record<string, unknown>): number | null {
+  const { investment, quantity, marketPrice, valueInBaseCurrency } = holding;
+  if (
+    !isNumber(investment) ||
+    !isNumber(quantity) ||
+    !isNumber(marketPrice) ||
+    !isNumber(valueInBaseCurrency) ||
+    investment <= 0 ||
+    quantity <= 0 ||
+    marketPrice <= 0 ||
+    valueInBaseCurrency <= 0
+  ) {
+    return null;
+  }
+  const rate = valueInBaseCurrency / (quantity * marketPrice);
+  return investment / quantity / rate;
+}
+
+/** The heaviest entry of a weighted list, when it carries at least half. */
+function dominant(list: unknown, key: string): string | null {
+  if (!Array.isArray(list)) return null;
+  let best: { value: string; weight: number } | null = null;
+  for (const entry of list) {
+    if (!isRecord(entry) || !isNumber(entry.weight)) continue;
+    const value = textOrNull(entry[key]);
+    if (value && (!best || entry.weight > best.weight)) best = { value, weight: entry.weight };
+  }
+  return best && best.weight >= 0.5 ? best.value : null;
+}
+
+function describe(profile: Record<string, unknown>, subClass: string | null) {
+  const country = dominant(profile.countries, "code");
+  const url = textOrNull(profile.url);
+  return {
+    sector: subClass === "STOCK" ? dominant(profile.sectors, "name") : null,
+    country: country && /^[A-Z]{2}$/.test(country) ? country : null,
+    url: url?.startsWith("https://") ? url : null,
+  };
 }
 
 function narrowCloses(body: unknown): GfCloses {

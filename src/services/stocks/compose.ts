@@ -6,9 +6,11 @@
  * What ships is how the portfolio moved, never what it is worth: a growth
  * index per account (the time-weighted return, 1 at the account's first
  * day), each holding's share of its account, and the public daily closes
- * of the holdings and of the benchmark. No amount, quantity, cost or
- * trade is in it, and none can be derived from it: an index is blind to
- * money moving in and out by construction.
+ * of the holdings and of the benchmark, and per position the average
+ * price paid per share and the day it was first bought. No amount,
+ * quantity or individual trade is in it, and none can be derived from
+ * it: an index is blind to money moving in and out by construction, and
+ * a per-share price without a share count is not a sum.
  *
  * The index chains daily returns. A day's return is the day's gain over
  * the capital at work that day — the previous close plus whatever was put
@@ -26,7 +28,7 @@
 import { DATE_RE } from "../../lib/http";
 import type { GfAccount, GfCloses, GfDay, GfHolding } from "./ghostfolio";
 
-export const SITE_VERSION = 2;
+export const SITE_VERSION = 3;
 
 /** What the page compares the portfolio with: an S&P 500 fund's closes
  *  (price return, so it slightly understates the index with dividends). */
@@ -37,8 +39,11 @@ export const BENCHMARK = { dataSource: "YAHOO", symbol: "VOO", label: "S&P 500" 
 export const DAILY_DAYS = 366;
 
 /** Capital below this (in the base currency) earns no return: a day that
- *  starts from dust would turn a cent of rounding into a large swing. */
-const MIN_CAPITAL = 1;
+ *  starts from dust would turn a cent of rounding, or a one-dollar
+ *  position going to zero, into the account's whole history. An account
+ *  that only ever held dust before (Schwab's first months) starts its
+ *  index the day real money went in. */
+export const MIN_CAPITAL = 100;
 
 /** Where the holdings trade, and when its regular session opens there. */
 const MARKET_TIME_ZONE = "America/New_York";
@@ -102,6 +107,11 @@ export interface SiteHolding {
   /** The position's return over its life in this account — a ratio of
    *  gain to money put in, so it says nothing of either. */
   performance: number | null;
+  /** Average price paid per share in this account, in the symbol's
+   *  currency; null when Ghostfolio cannot say. */
+  cost: number | null;
+  /** The first buy in this account, a calendar day. */
+  since: string | null;
 }
 
 /** Cash in one currency, and its share of the account. */
@@ -132,6 +142,12 @@ export interface SiteSymbol {
   currency: string;
   kind: "stock" | "etf" | "other";
   logo: string | null;
+  /** A stock's sector (Ghostfolio's names); null for a fund. */
+  sector: string | null;
+  /** ISO 3166 alpha-2, where it is mostly listed or based. */
+  country: string | null;
+  /** The company's site, https only. */
+  url: string | null;
   /** Close on each of `days`, carried over holidays; null before the
    *  first close Ghostfolio has. */
   closes: (number | null)[];
@@ -284,6 +300,8 @@ function weigh(holdings: GfHolding[]): { holdings: SiteHolding[]; cash: SiteCash
         symbol: holding.symbol,
         weight: roundWeight(holding.weight),
         performance: holding.performance === null ? null : roundIndex(holding.performance),
+        cost: holding.cost === null ? null : roundPrice(holding.cost),
+        since: holding.since,
       });
     }
   }
@@ -373,6 +391,9 @@ export function composeSite(
       currency: holding.currency,
       kind: kindOf(holding.subClass),
       logo: logos.symbols.get(holding.symbol) ?? null,
+      sector: holding.sector,
+      country: holding.country,
+      url: holding.url,
       closes: alignCloses(days, upstream.closes.get(holding.symbol), session),
     })),
   };

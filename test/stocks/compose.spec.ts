@@ -30,6 +30,11 @@ const holding = (symbol: string, weight: number, extra: Partial<GfHolding> = {})
   cash: false,
   weight,
   performance: 0.25,
+  cost: 400,
+  since: "2026-01-02",
+  sector: "Technology",
+  country: "US",
+  url: "https://example.com",
   ...extra,
 });
 
@@ -71,6 +76,21 @@ describe("growthIndex", () => {
     ]);
     expect(index.get("2026-01-05")).toBeCloseTo(1.1);
     expect(index.get("2026-01-06")).toBeCloseTo(1.1);
+  });
+
+  it("earns nothing on dust, and starts once real money is in", () => {
+    const index = growthIndex([
+      day("2026-01-01", 0, 0),
+      // A one-dollar position that loses almost everything.
+      day("2026-01-02", 1, 0, 1),
+      day("2026-01-05", 0.1, -0.9),
+      // Then a real buy, and a 10% day on it.
+      day("2026-01-06", 1000.1, -0.9, 1000),
+      day("2026-01-07", 1100.1, 99.1),
+    ]);
+    expect([...index.keys()][0]).toBe("2026-01-05");
+    expect(index.get("2026-01-06")).toBeCloseTo(1);
+    expect(index.get("2026-01-07")).toBeCloseTo(1.1);
   });
 
   it("is empty for an account that never held anything", () => {
@@ -233,7 +253,9 @@ describe("composeSite", () => {
     expect(site.accounts[0]).toMatchObject({
       index: [1, 1, 1.1],
       logo: null,
-      holdings: [{ symbol: "MSFT", weight: 0.9, performance: 0.25 }],
+      holdings: [
+        { symbol: "MSFT", weight: 0.9, performance: 0.25, cost: 400, since: "2026-01-02" },
+      ],
       cash: [{ currency: "USD", weight: 0.1 }],
     });
     // The session's day is priced at the live quote.
@@ -244,6 +266,9 @@ describe("composeSite", () => {
         currency: "USD",
         kind: "stock",
         logo: "https://img.test/msft.webp",
+        sector: "Technology",
+        country: "US",
+        url: "https://example.com",
         closes: [400, 410, 500],
       },
     ]);
