@@ -26,6 +26,7 @@ const CHART = [
 
 const holding = (symbol: string, allocation: number, assetClass = "EQUITY", sub = "STOCK") => ({
   allocationInPercentage: allocation,
+  netPerformancePercentWithCurrencyEffect: 0.25,
   quantity: 123_456,
   valueInBaseCurrency: 888_888,
   assetProfile: {
@@ -120,10 +121,10 @@ describe("GET /stocks/site", () => {
     expect(body.accounts.map((a: { id: string }) => a.id)).toEqual(["all", "ibkr", "schwab"]);
     expect(body.accounts[0]).toMatchObject({
       index: [1, 1, 1.1],
-      cash: 0.1,
+      cash: [{ currency: "USD", weight: 0.1 }],
       holdings: [
-        { symbol: "MSFT", weight: 0.6 },
-        { symbol: "BOXX", weight: 0.3 },
+        { symbol: "MSFT", weight: 0.6, performance: 0.25 },
+        { symbol: "BOXX", weight: 0.3, performance: 0.25 },
       ],
     });
     const symbols = body.symbols as { symbol: string; logo: string | null; kind: string }[];

@@ -29,6 +29,7 @@ const holding = (symbol: string, weight: number, extra: Partial<GfHolding> = {})
   subClass: "STOCK",
   cash: false,
   weight,
+  performance: 0.25,
   ...extra,
 });
 
@@ -186,8 +187,16 @@ describe("composeSite", () => {
       ],
     },
     accounts: [
-      { account: { id: "a1", name: "IBKR" }, chart, holdings: [holding("MSFT", 1)] },
-      { account: { id: "a2", name: "Empty" }, chart: [day("2026-01-01", 0, 0)], holdings: [] },
+      {
+        account: { id: "a1", name: "IBKR", platformUrl: null },
+        chart,
+        holdings: [holding("MSFT", 1)],
+      },
+      {
+        account: { id: "a2", name: "Empty", platformUrl: null },
+        chart: [day("2026-01-01", 0, 0)],
+        holdings: [],
+      },
     ],
     closes: new Map([
       [
@@ -208,7 +217,10 @@ describe("composeSite", () => {
   it("ships returns, weights and public prices only", () => {
     const site = composeSite(
       upstream(),
-      new Map([["MSFT", "https://img.test/msft.webp"]]),
+      {
+        symbols: new Map([["MSFT", "https://img.test/msft.webp"]]),
+        accounts: new Map([["a1", "https://img.test/ibkr.webp"]]),
+      },
       "2026-01-06",
       "2026-01-05"
     );
@@ -220,8 +232,9 @@ describe("composeSite", () => {
     ]);
     expect(site.accounts[0]).toMatchObject({
       index: [1, 1, 1.1],
-      holdings: [{ symbol: "MSFT", weight: 0.9 }],
-      cash: 0.1,
+      logo: null,
+      holdings: [{ symbol: "MSFT", weight: 0.9, performance: 0.25 }],
+      cash: [{ currency: "USD", weight: 0.1 }],
     });
     // The session's day is priced at the live quote.
     expect(site.symbols).toEqual([
@@ -245,6 +258,8 @@ describe("composeSite", () => {
 
   it("refuses a portfolio with no history", () => {
     const empty = { ...upstream(), portfolio: { chart: [day("2026-01-01", 0, 0)], holdings: [] } };
-    expect(() => composeSite(empty, new Map(), "2026-01-06", "2026-01-05")).toThrow(/no history/);
+    expect(() =>
+      composeSite(empty, { symbols: new Map(), accounts: new Map() }, "2026-01-06", "2026-01-05")
+    ).toThrow(/no history/);
   });
 });

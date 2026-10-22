@@ -27,6 +27,8 @@ const GHOSTFOLIO_TIMEOUT_MS = 20_000;
 export interface GfAccount {
   id: string;
   name: string;
+  /** The broker's site, from the account's platform, when it has one. */
+  platformUrl: string | null;
 }
 
 /** One calendar day of a portfolio's chart, in its base currency. */
@@ -53,6 +55,10 @@ export interface GfHolding {
   cash: boolean;
   /** Share of the (filtered) portfolio, 0–1. */
   weight: number;
+  /** The position's return over its whole life, as Ghostfolio reports it
+   *  under the owner's chosen calculation (ROI, ROAI): realised and
+   *  unrealised gain, dividends and fees, in the base currency. */
+  performance: number | null;
 }
 
 export interface GfCloses {
@@ -84,7 +90,8 @@ function narrowAccounts(body: unknown): GfAccount[] {
     const id = isRecord(account) ? textOrNull(account.id) : null;
     const name = isRecord(account) ? textOrNull(account.name) : null;
     if (!id || !name) throw new Error("Ghostfolio account without id or name");
-    return { id, name };
+    const platform = isRecord(account) && isRecord(account.platform) ? account.platform : null;
+    return { id, name, platformUrl: platform ? textOrNull(platform.url) : null };
   });
 }
 
@@ -131,6 +138,9 @@ function narrowHoldings(body: unknown): GfHolding[] {
       subClass,
       cash: textOrNull(profile.assetClass) === "LIQUIDITY" || subClass === "CASH",
       weight,
+      performance: isNumber(holding.netPerformancePercentWithCurrencyEffect)
+        ? holding.netPerformancePercentWithCurrencyEffect
+        : null,
     };
   });
 }

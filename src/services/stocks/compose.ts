@@ -26,7 +26,7 @@
 import { DATE_RE } from "../../lib/http";
 import type { GfAccount, GfCloses, GfDay, GfHolding } from "./ghostfolio";
 
-export const SITE_VERSION = 1;
+export const SITE_VERSION = 2;
 
 /** What the page compares the portfolio with: an S&P 500 fund's closes
  *  (price return, so it slightly understates the index with dividends). */
@@ -99,17 +99,30 @@ export interface SiteHolding {
   symbol: string;
   /** Share of the account, cash included, 0–1. */
   weight: number;
+  /** The position's return over its life in this account — a ratio of
+   *  gain to money put in, so it says nothing of either. */
+  performance: number | null;
+}
+
+/** Cash in one currency, and its share of the account. */
+export interface SiteCash {
+  currency: string;
+  weight: number;
 }
 
 export interface SiteAccount {
   /** `all` for the whole portfolio, otherwise a slug of the name. */
   id: string;
   name: string;
+  /** The broker's logo; null for the whole portfolio and for an account
+   *  with no platform (or none found). */
+  logo: string | null;
   /** Growth index on `days`: 1 on the account's first day, null before. */
   index: (number | null)[];
   /** Most weight first; cash is `cash`, not a holding. */
   holdings: SiteHolding[];
-  cash: number;
+  /** Most weight first. */
+  cash: SiteCash[];
 }
 
 export interface SiteSymbol {
@@ -259,18 +272,29 @@ export function slug(name: string, taken: Set<string>): string {
   return id;
 }
 
-/** Holdings by weight, cash split off. */
-function weigh(holdings: GfHolding[]): { holdings: SiteHolding[]; cash: number } {
-  let cash = 0;
+/** Holdings by weight, cash split off by currency. */
+function weigh(holdings: GfHolding[]): { holdings: SiteHolding[]; cash: SiteCash[] } {
+  const cash = new Map<string, number>();
   const held: SiteHolding[] = [];
   for (const holding of holdings) {
-    if (holding.cash) cash += holding.weight;
-    else if (holding.weight > 0) {
-      held.push({ symbol: holding.symbol, weight: roundWeight(holding.weight) });
+    if (holding.cash) {
+      cash.set(holding.currency, (cash.get(holding.currency) ?? 0) + holding.weight);
+    } else if (holding.weight > 0) {
+      held.push({
+        symbol: holding.symbol,
+        weight: roundWeight(holding.weight),
+        performance: holding.performance === null ? null : roundIndex(holding.performance),
+      });
     }
   }
   held.sort((a, b) => b.weight - a.weight || a.symbol.localeCompare(b.symbol));
-  return { holdings: held, cash: roundWeight(cash) };
+  return {
+    holdings: held,
+    cash: [...cash]
+      .map(([currency, weight]) => ({ currency, weight: roundWeight(weight) }))
+      .filter((entry) => entry.weight > 0)
+      .sort((a, b) => b.weight - a.weight || a.currency.localeCompare(b.currency)),
+  };
 }
 
 const kindOf = (subClass: string | null): SiteSymbol["kind"] =>
@@ -294,9 +318,15 @@ export function historyDays(chart: GfDay[], today: string): number {
   return Math.max(30, span + 7);
 }
 
+/** Mirrored logo URLs: holdings by symbol, brokers by account id. */
+export interface Logos {
+  symbols: ReadonlyMap<string, string | null>;
+  accounts: ReadonlyMap<string, string | null>;
+}
+
 export function composeSite(
   upstream: Upstream,
-  logos: ReadonlyMap<string, string | null>,
+  logos: Logos,
   today: string,
   session: string
 ): Site {
@@ -309,6 +339,7 @@ export function composeSite(
     {
       id: "all",
       name: "All accounts",
+      logo: null,
       index: alignIndex(days, whole),
       ...weigh(upstream.portfolio.holdings),
     },
@@ -316,10 +347,11 @@ export function composeSite(
   for (const { account, chart, holdings } of upstream.accounts) {
     const weighed = weigh(holdings);
     const index = growthIndex(toSessions(chart, session));
-    if (index.size === 0 || (weighed.holdings.length === 0 && weighed.cash === 0)) continue;
+    if (index.size === 0 || (weighed.holdings.length === 0 && weighed.cash.length === 0)) continue;
     accounts.push({
       id: slug(account.name, taken),
       name: account.name,
+      logo: logos.accounts.get(account.id) ?? null,
       index: alignIndex(days, index),
       ...weighed,
     });
@@ -340,7 +372,7 @@ export function composeSite(
       name: holding.name,
       currency: holding.currency,
       kind: kindOf(holding.subClass),
-      logo: logos.get(holding.symbol) ?? null,
+      logo: logos.symbols.get(holding.symbol) ?? null,
       closes: alignCloses(days, upstream.closes.get(holding.symbol), session),
     })),
   };

@@ -28,7 +28,7 @@ import {
   SITE_VERSION,
 } from "./compose";
 import { connect } from "./ghostfolio";
-import { mirrorLogos } from "./logos";
+import { mirrorBrokers, mirrorLogos } from "./logos";
 
 export const stocksSite: Snapshot = {
   key: "stocks:site",
@@ -71,15 +71,19 @@ export const stocksSite: Snapshot = {
     );
 
     const previous = await read(env, stocksSite);
-    const logos = await mirrorLogos(
-      env,
-      held.map((holding) => holding.symbol),
-      linkedKeys(env, previous?.text)
-    );
+    const known = linkedKeys(env, previous?.text);
+    const [symbols, brokers] = await Promise.all([
+      mirrorLogos(
+        env,
+        held.map((holding) => holding.symbol),
+        known
+      ),
+      mirrorBrokers(env, list, known),
+    ]);
     return JSON.stringify(
       composeSite(
         { portfolio: { chart, holdings }, accounts, closes, benchmark },
-        logos,
+        { symbols, accounts: brokers },
         today,
         marketSession(new Date())
       )
