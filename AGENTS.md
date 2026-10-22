@@ -357,8 +357,24 @@ production.
   close plus that day's money in) and ships that, the holdings' weights,
   cash's weight, and public closes. Ghostfolio's own percentages (ROAI,
   ROI, whichever the owner picks in its settings) are deliberately not
-  read: neither chains day to day, so neither can be cut to a range or
-  set beside an index. The tests pin that no amount reaches the body.
+  read for the index: neither chains day to day, so neither can be cut to
+  a range or set beside an index. The tests pin that no amount reaches
+  the body.
+- Per position it also ships the **average price paid per share**
+  (`cost`: investment over quantity, divided in `ghostfolio.ts` so neither
+  leaves it, at today's valuation rate) and the first buy's day
+  (`since`); per symbol a stock's sector, its dominant country and its
+  site from the asset profile. A per-share price without a share count is
+  not a sum — keep it that way: never ship the quantity or a trade.
+- Days on less than `MIN_CAPITAL` (100, base currency) earn no return, so
+  an account that held only dust (a one-dollar position) starts its index
+  the day real money went in.
+- The ledger is entered in **split-adjusted** terms: Yahoo rewrites
+  history after a split, Ghostfolio does not rewrite activities, so a
+  trade from before a split must be re-entered at its post-split
+  quantity and price (MVIS's 1:15 of 2026-08-01 is in Schwab that way,
+  with the original in the activity's comment). A position valued far
+  from what was paid on its first day is the symptom.
 - Days are **US market sessions**, not Shanghai days. Ghostfolio buckets
   its chart by its server zone (Asia/Shanghai — the `Timezone` header
   changes nothing) and values the last day at the live quote, so from
