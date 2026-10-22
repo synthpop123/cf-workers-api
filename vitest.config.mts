@@ -17,6 +17,8 @@ const TEST_SECRETS = {
   SWITCH_API_TOKEN: "test-switch-token",
   PCTL_SESSION_TOKEN: "test-session-token",
   AIRTRAIL_API_KEY: "test-key",
+  GHOSTFOLIO_TOKEN: "test-ghostfolio-token",
+  LOGO_DEV_TOKEN: "test-logo-token",
 };
 Object.assign(process.env, TEST_SECRETS);
 // Wrangler then announces where it found them, at info level, once per

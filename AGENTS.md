@@ -29,7 +29,7 @@ production.
 
 ## Shape of the Worker
 
-- One Worker, seven services. Each `src/services/<name>/` default-exports
+- One Worker, eight services. Each `src/services/<name>/` default-exports
   a `Service` (`lib/service.ts`): its name — also its path prefix and KV
   namespace — its snapshot, and any other routes. `src/services/index.ts`
   is the registry; `src/index.ts` derives `GET /<name>/site` for each and
@@ -336,6 +336,47 @@ production.
 - music's `LISTENS` and movies' `FILMS` are exactly what /misc shows. If
   the page wants more rows, change the constant here (a payload change:
   bump `SITE_VERSION`).
+
+## stocks
+
+- The ledger is **Ghostfolio's** (`GHOSTFOLIO_URL`, self-hosted on the arm
+  host; its compose lives in homelab-infra `stacks/ghostfolio`). Activities
+  are recorded there, never here, and this Worker stores nothing but the
+  snapshot. It signs in as a separate bot user (`GHOSTFOLIO_TOKEN`, that
+  user's security token → `POST /api/v1/auth/anonymous` → JWT) and reads
+  the owner's portfolio through a PRIVATE access the owner granted it,
+  sent as `Impersonation-Id: GHOSTFOLIO_ACCESS_ID`. The grant must carry
+  `portfolio:read:values` ("View", not "Restricted view"): the index is
+  computed from money amounts, which a restricted grant redacts — the
+  narrower then fails loudly rather than shipping zeros. It expires
+  (`Access.expiresAt`, currently 2027-10); a lapsed grant is a failed
+  composition and the last good copy keeps serving.
+- **The payload is returns, never amounts.** `services/stocks/ghostfolio.ts`
+  types only what composition reads; `compose.ts` turns each chart into a
+  time-weighted growth index (`growthIndex`: daily gain over the previous
+  close plus that day's money in) and ships that, the holdings' weights,
+  cash's weight, and public closes. Ghostfolio's own percentages (ROAI,
+  ROI, whichever the owner picks in its settings) are deliberately not
+  read: neither chains day to day, so neither can be cut to a range or
+  set beside an index. The tests pin that no amount reaches the body.
+- Days are **US market sessions**, not Shanghai days. Ghostfolio buckets
+  its chart by its server zone (Asia/Shanghai — the `Timezone` header
+  changes nothing) and values the last day at the live quote, so from
+  Shanghai midnight until the next New York open that day is the
+  previous session again. `toSessions` folds every day from
+  `marketSession(now)` on into that session; holiday calendars are not
+  modelled. Weekends drop off the axis; days older than `DAILY_DAYS` thin
+  to one a week.
+- A composition is ~20 Ghostfolio requests (sign-in, accounts, a chart and
+  holdings for the portfolio and each account, one price history per
+  holding plus VOO), hence its own `offset: 5` minute in the hourly slot.
+  A holding whose history fails ships without a line; anything else
+  fails the composition.
+- Logos come from logo.dev's ticker lookup (`LOGO_DEV_TOKEN`, a
+  publishable key that still never reaches a browser), mirrored once per
+  ticker as `stocks/logos/<TICKER>-96.webp`. Delete the object to pick up
+  a new logo. `lib/images.ts` logs a failed mirror by key, not source URL,
+  because this source carries the key.
 
 ## memos
 

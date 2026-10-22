@@ -1,28 +1,28 @@
 /**
  * GET /misc — every snapshot lkwplus.com/misc draws, in one response.
  *
- * The page has four live sections, and four endpoints meant four requests
+ * The page has five live sections, and five endpoints meant five requests
  * racing for the first paint. Here the bundle is assembled from the stored
  * snapshot texts by concatenation — no parse, no re-serialization — so it
- * costs four KV reads and a hash:
+ * costs five KV reads and a hash:
  *
- *   {"flights":{…},"movies":{…},"music":{…},"switch":{…}}
+ *   {"flights":{…},"movies":{…},"music":{…},"stocks":{…},"switch":{…}}
  *
  * Each section keeps its own `schemaVersion` and its own decoder on the
  * page. A section with nothing to serve is `null`, which fails only that
- * section there — one upstream being down never blanks the other three.
+ * section there — one upstream being down never blanks the others.
  *
- * The ETag is derived from the four section ETags, so the bundle 304s
+ * The ETag is derived from the section ETags, so the bundle 304s
  * exactly when none of them moved, and `Last-Modified` is the newest of
  * their change times.
  */
 
 import { etagOf } from "./lib/http";
 import { load, serve } from "./lib/snapshot";
-import { flights, movies, music, switchPlay } from "./services";
+import { flights, movies, music, stocks, switchPlay } from "./services";
 
 /** The sections, keyed in the bundle by service name. */
-const SECTIONS = [flights, movies, music, switchPlay];
+const SECTIONS = [flights, movies, music, stocks, switchPlay];
 
 export async function handleMisc(request: Request, env: Env): Promise<Response> {
   const stored = await Promise.all(SECTIONS.map(({ site }) => load(env, site)));

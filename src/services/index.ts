@@ -10,6 +10,7 @@ import memos from "./memos";
 import movies from "./movies";
 import music from "./music";
 import now from "./now";
+import stocks from "./stocks";
 import switchPlay from "./switch";
 import tokens from "./tokens";
 
@@ -20,7 +21,8 @@ export const SERVICES = [
   music,
   movies,
   memos,
+  stocks,
   now,
 ] as const satisfies readonly Service[];
 
-export { flights, memos, movies, music, now, switchPlay, tokens };
+export { flights, memos, movies, music, now, stocks, switchPlay, tokens };

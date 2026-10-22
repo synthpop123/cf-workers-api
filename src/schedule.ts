@@ -18,6 +18,11 @@
  *                             flight change when a flight is logged, and
  *                             `upcoming` flips at midnight, which is on
  *                             the hour
+ *                   stocks    hourly at five past — about twenty
+ *                             Ghostfolio requests, so off the hour, where
+ *                             flights and movies spend the trigger's
+ *                             subrequests; a session's moves show within
+ *                             the hour, and the day rolls at 00:05
  *   `0 1 * * *`     the Switch sync (09:00 Asia/Shanghai, after Nintendo's
  *                   overnight recalculation) — on a trigger of its own
  *                   because each trigger is its own invocation, with its
@@ -35,12 +40,12 @@
 
 import { TIME_ZONE } from "./lib/http";
 import { refresh, type Snapshot } from "./lib/snapshot";
-import { flights, memos, movies, music, now } from "./services";
+import { flights, memos, movies, music, now, stocks } from "./services";
 import { runSync } from "./services/switch";
 
-/** Minutes between runs, counted from midnight; or a daily `HH:MM`. Both
- *  in TIME_ZONE. Absent: every time the trigger fires. */
-export type Cadence = { every: number } | { at: `${number}:${number}` };
+/** Minutes between runs, counted from midnight plus `offset`; or a daily
+ *  `HH:MM`. Both in TIME_ZONE. Absent: every time the trigger fires. */
+export type Cadence = { every: number; offset?: number } | { at: `${number}:${number}` };
 
 export interface Job {
   name: string;
@@ -73,6 +78,7 @@ export const TRIGGERS = new Map<string, Job[]>([
       refreshing(memos.site, { every: 5 }),
       refreshing(movies.site, { every: 180 }),
       refreshing(flights.site, { every: 60 }),
+      refreshing(stocks.site, { every: 60, offset: 5 }),
     ],
   ],
   ["0 1 * * *", [{ name: "switch sync", run: runSync }]],
@@ -94,7 +100,10 @@ export function minuteOfDay(at: Date): number {
 export function isDue(cadence: Cadence | undefined, at: Date): boolean {
   if (!cadence) return true;
   const minute = minuteOfDay(at);
-  if ("every" in cadence) return minute % cadence.every === 0;
+  if ("every" in cadence) {
+    const offset = cadence.offset ?? 0;
+    return minute >= offset && (minute - offset) % cadence.every === 0;
+  }
   const [hours, minutes] = cadence.at.split(":").map(Number);
   return minute === hours * 60 + minutes;
 }

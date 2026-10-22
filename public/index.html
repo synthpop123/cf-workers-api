@@ -664,6 +664,7 @@
         <tr><td><code>/music</code></td><td>self-hosted Koito</td><td>snapshot only</td><td>every 5 min</td></tr>
         <tr><td><code>/movies</code></td><td>Letterboxd RSS</td><td>R2 <code>imagebed</code> (posters)</td><td>every 3 hours</td></tr>
         <tr><td><code>/memos</code></td><td>self-hosted Mastodon</td><td>R2 <code>imagebed</code> (photos)</td><td>every 5 min</td></tr>
+        <tr><td><code>/stocks</code></td><td>self-hosted Ghostfolio, logo.dev</td><td>R2 <code>imagebed</code> (logos)</td><td>hourly, at five past</td></tr>
         <tr><td><code>/now</code></td><td>the stored music, movies, tokens and flights views</td><td>snapshot only</td><td>every 5 min, right after music</td></tr>
       </tbody>
     </table>
@@ -751,7 +752,7 @@
         </button>
         <a class="ep-aside" href="/misc" target="_blank" rel="noopener" aria-label="Open /misc in a new tab">open ↗</a>
         <div class="ep-body">
-          <p>The four snapshots <a href="https://lkwplus.com/misc" rel="noopener">lkwplus.com/misc</a> draws — <code>flights</code>, <code>movies</code>, <code>music</code>, <code>switch</code> — in one response, assembled from the stored texts without re-serializing. A section with nothing to serve is <code>null</code>; its ETag moves when any section’s does.</p>
+          <p>The five snapshots <a href="https://lkwplus.com/misc" rel="noopener">lkwplus.com/misc</a> draws — <code>flights</code>, <code>movies</code>, <code>music</code>, <code>stocks</code>, <code>switch</code> — in one response, assembled from the stored texts without re-serializing. A section with nothing to serve is <code>null</code>; its ETag moves when any section’s does.</p>
         </div>
       </li>
       <li class="ep">
@@ -818,6 +819,17 @@
         <a class="ep-aside" href="/memos/site" target="_blank" rel="noopener" aria-label="Open /memos/site in a new tab">open ↗</a>
         <div class="ep-body">
           <p>The latest public Mastodon statuses, attachments resolved to what renders; photos copied to <code>img.lkwplus.com</code> as WebP at 640 and 1600 wide.</p>
+        </div>
+      </li>
+      <li class="ep">
+        <span class="method" data-m="GET">GET</span>
+        <button class="path" type="button" data-copy="/stocks/site" aria-label="Copy https://api.lkwplus.com/stocks/site">/stocks/site
+          <svg class="ic-copy" aria-hidden="true"><use href="#i-copy"/></svg>
+          <svg class="ic-check" aria-hidden="true"><use href="#i-check"/></svg>
+        </button>
+        <a class="ep-aside" href="/stocks/site" target="_blank" rel="noopener" aria-label="Open /stocks/site in a new tab">open ↗</a>
+        <div class="ep-body">
+          <p>A portfolio kept in Ghostfolio, as returns only: a time-weighted growth index and holdings by weight for the whole and for each account, with the daily closes of every holding and of an S&amp;P 500 fund. No amount, quantity or trade.</p>
         </div>
       </li>
       <li class="ep">

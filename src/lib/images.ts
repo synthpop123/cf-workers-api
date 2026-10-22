@@ -68,7 +68,8 @@ export async function mirrorImage(
     });
     return "copied";
   } catch (error) {
-    console.error("Image mirror failed", source, error);
+    // The key, not the source: a source URL may carry an API key.
+    console.error("Image mirror failed", key, error);
     return "failed";
   }
 }

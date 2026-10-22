@@ -26,7 +26,12 @@
     // reads (and links to).
     "MASTODON_URL": "https://mastodon.lkwplus.com",
     "MASTODON_ACCOUNT": "114671030739656846",
-    "MASTODON_USER": "lkw123"
+    "MASTODON_USER": "lkw123",
+    // The self-hosted Ghostfolio the stocks service reads, and the id of
+    // the read-only access its owner granted the bot user it signs in as
+    // (sent as Impersonation-Id).
+    "GHOSTFOLIO_URL": "https://ghostfolio.lkwplus.com",
+    "GHOSTFOLIO_ACCESS_ID": "245c4b96-e08b-41f7-9217-28703aaf5fe2"
   },
 
   // Set with `npx wrangler secret put <NAME>`; .dev.vars locally. Declared
@@ -42,7 +47,12 @@
       // Nintendo Account session token for the Parental Controls app.
       "PCTL_SESSION_TOKEN",
       // AirTrail API key (sent as Authorization: Bearer).
-      "AIRTRAIL_API_KEY"
+      "AIRTRAIL_API_KEY",
+      // Security token of the Ghostfolio bot user the stocks service
+      // signs in as.
+      "GHOSTFOLIO_TOKEN",
+      // logo.dev publishable key, for the stocks logos the Worker mirrors.
+      "LOGO_DEV_TOKEN"
     ]
   },
 
