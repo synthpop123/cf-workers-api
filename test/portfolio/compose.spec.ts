@@ -11,8 +11,8 @@ import {
   slug,
   toSessions,
   type Upstream,
-} from "../../src/services/stocks/compose";
-import type { GfDay, GfHolding } from "../../src/services/stocks/ghostfolio";
+} from "../../src/services/portfolio/compose";
+import type { GfDay, GfHolding } from "../../src/services/portfolio/ghostfolio";
 
 const day = (date: string, value: number, netPerformance: number, investment = 0): GfDay => ({
   date,

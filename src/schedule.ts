@@ -18,7 +18,7 @@
  *                             flight change when a flight is logged, and
  *                             `upcoming` flips at midnight, which is on
  *                             the hour
- *                   stocks    hourly at five past — about twenty
+ *                   portfolio hourly at five past — about twenty
  *                             Ghostfolio requests, so off the hour, where
  *                             flights and movies spend the trigger's
  *                             subrequests; a session's moves show within
@@ -40,7 +40,7 @@
 
 import { TIME_ZONE } from "./lib/http";
 import { refresh, type Snapshot } from "./lib/snapshot";
-import { flights, memos, movies, music, now, stocks } from "./services";
+import { flights, memos, movies, music, now, portfolio } from "./services";
 import { runSync } from "./services/switch";
 
 /** Minutes between runs, counted from midnight plus `offset`; or a daily
@@ -78,7 +78,7 @@ export const TRIGGERS = new Map<string, Job[]>([
       refreshing(memos.site, { every: 5 }),
       refreshing(movies.site, { every: 180 }),
       refreshing(flights.site, { every: 60 }),
-      refreshing(stocks.site, { every: 60, offset: 5 }),
+      refreshing(portfolio.site, { every: 60, offset: 5 }),
     ],
   ],
   ["0 1 * * *", [{ name: "switch sync", run: runSync }]],

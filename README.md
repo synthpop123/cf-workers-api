@@ -23,7 +23,7 @@ flowchart LR
   subgraph worker[cf-workers-api]
     Router["router"]
     Scheduler["scheduler<br/>(2 cron triggers)"]
-    Services["services/<br/>tokens · switch · flights · music · movies · memos · stocks · now"]
+    Services["services/<br/>tokens · switch · flights · music · movies · memos · portfolio · now"]
   end
   CLI & Collectors -->|POST /tokens/…| Router
   Scheduler --> Services
@@ -45,8 +45,8 @@ flowchart LR
 | [`music`](src/services/music) | self-hosted [Koito](https://github.com/gabehf/Koito) | — | every 5 minutes |
 | [`movies`](src/services/movies) | Letterboxd RSS | R2 `imagebed` (posters) | every 3 hours |
 | [`memos`](src/services/memos) | self-hosted Mastodon | R2 `imagebed` (photos) | every 5 minutes |
-| [`stocks`](src/services/stocks) | self-hosted [Ghostfolio](https://github.com/ghostfolio/ghostfolio); logo.dev | R2 `imagebed` (logos) | hourly, at five past |
-| [`now`](src/services/now) | the stored music, movies, tokens and flights views | — | every 5 minutes, right after music |
+| [`portfolio`](src/services/portfolio) | self-hosted [Ghostfolio](https://github.com/ghostfolio/ghostfolio); logo.dev | R2 `imagebed` (logos) | hourly, at five past |
+| [`now`](src/services/now) | the stored music, movies, tokens and portfolio views | — | every 5 minutes, right after music |
 
 - **tokens** implements the official server's submission contract and merge semantics for the `tokens` CLI — per-device, per-day, per-client replace with a regression guard, parser-revision floors, authoritative coverage windows, the official consistency checks — and keeps the full usage matrix (device × date × client × model × provider, every token category, messages, cost). Its view is the dashboard at [lkwplus.com/tokens](https://lkwplus.com/tokens), including subscription quota cards reported by a collector that keeps the vendor credentials on its own machine.
 - **switch** syncs daily play time from Nintendo's Parental Controls API, looks each title up once on the eShop (HK for the price, US for a consistent name) and mirrors cover art into R2.
@@ -54,8 +54,8 @@ flowchart LR
 - **music** composes Koito's stats, a dense year of daily plays and the latest listens into one document.
 - **movies** parses the Letterboxd diary feed and mirrors each poster into R2.
 - **memos** reads the latest public Mastodon statuses and copies their photos into R2 as WebP at 640 and 1600 wide.
-- **stocks** reads the portfolio kept in Ghostfolio through a read-only grant and ships returns, never amounts: a time-weighted growth index per account, each holding's weight, and the public daily closes of the holdings and of an S&P 500 fund. Company logos are mirrored into R2 from logo.dev.
-- **now** is the home page's Now section: the latest listen and film, today's tokens and the last flight with its cities, read from the other services' stored views rather than their upstreams.
+- **portfolio** reads the portfolio kept in Ghostfolio through a read-only grant and ships returns, never amounts: a time-weighted growth index per account, each holding's weight, and the public daily closes of the holdings and of an S&P 500 fund. Company logos are mirrored into R2 from logo.dev.
+- **now** is the home page's Now section: the latest listen and film, today's tokens with the last two weeks, and the portfolio's last three months against the S&P 500, read from the other services' stored views rather than their upstreams.
 
 ## API
 
@@ -65,13 +65,13 @@ Reads are public and open to any origin. Every view answers `Cache-Control: no-c
 |---|---|
 | `GET /tokens/site` | the tokens dashboard view |
 | `GET /switch/site` | Switch stats, a year of daily play and the catalog by lifetime play |
-| `GET /flights/site` | airports, routes, airline and aircraft tallies, totals, the last flight |
+| `GET /flights/site` | airports, routes, airline and aircraft tallies, totals |
 | `GET /music/site` | Koito stats, a dense year of daily plays, the latest listens |
 | `GET /movies/site` | the latest diary entries |
 | `GET /memos/site` | the latest memos, attachments resolved to what renders |
-| `GET /stocks/site` | growth index and holdings by weight per account, daily closes of the holdings and the benchmark |
-| `GET /now/site` | `{listen, film, tokens, flight}`: the latest of each, today's token totals |
-| `GET /misc` | `{"flights":…,"movies":…,"music":…,"stocks":…,"switch":…}` — each exactly that service's view, or `null` if it has nothing to serve |
+| `GET /portfolio/site` | growth index and holdings by weight per account, daily closes of the holdings and the benchmark |
+| `GET /now/site` | `{listen, film, tokens, portfolio}`: the latest listen and film, today's token totals with 14 days of bars, the portfolio's 3M index and benchmark |
+| `GET /misc` | `{"flights":…,"movies":…,"music":…,"portfolio":…,"switch":…}` — each exactly that service's view, or `null` if it has nothing to serve |
 | `GET /health` | `{"ok":true,"services":[…]}` |
 
 Writes take a bearer token:
@@ -110,7 +110,7 @@ The account-wide cron allowance is small (five triggers on the free plan), so th
 
 | Trigger | Jobs |
 |---|---|
-| `*/5 * * * *` | music then now, and memos, every 5 min · movies every 3 h · flights hourly · stocks hourly at :05 |
+| `*/5 * * * *` | music then now, and memos, every 5 min · movies every 3 h · flights hourly · portfolio hourly at :05 |
 | `0 1 * * *` | the Switch sync |
 
 Each trigger is its own invocation with its own CPU and subrequest budget, which is why the Switch sync — the one heavy job — has a trigger to itself. A test checks that the triggers match `wrangler.jsonc` and that every cadence lands on a tick.

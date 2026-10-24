@@ -27,7 +27,7 @@
     "MASTODON_URL": "https://mastodon.lkwplus.com",
     "MASTODON_ACCOUNT": "114671030739656846",
     "MASTODON_USER": "lkw123",
-    // The self-hosted Ghostfolio the stocks service reads, and the id of
+    // The self-hosted Ghostfolio the portfolio service reads, and the id of
     // the read-only access its owner granted the bot user it signs in as
     // (sent as Impersonation-Id).
     "GHOSTFOLIO_URL": "https://ghostfolio.lkwplus.com",
@@ -48,10 +48,10 @@
       "PCTL_SESSION_TOKEN",
       // AirTrail API key (sent as Authorization: Bearer).
       "AIRTRAIL_API_KEY",
-      // Security token of the Ghostfolio bot user the stocks service
+      // Security token of the Ghostfolio bot user the portfolio service
       // signs in as.
       "GHOSTFOLIO_TOKEN",
-      // logo.dev publishable key, for the stocks logos the Worker mirrors.
+      // logo.dev publishable key, for the portfolio logos the Worker mirrors.
       "LOGO_DEV_TOKEN"
     ]
   },

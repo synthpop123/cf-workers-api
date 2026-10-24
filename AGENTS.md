@@ -315,11 +315,8 @@ production.
 
 - **The payload is the map, not the log.** `composeSite` in
   `services/flights/compose.ts` ships airports, routes (airport pairs, either direction
-  merged), airline/aircraft tallies and totals, and one single flight:
-  `last`, the most recent flown, for the home page's Last flight tile —
-  its day, airports as flown, distance, duration, airline and aircraft,
-  never a flight number or a time of day (`departure` is read only to
-  order two flights on one day). The map shows where, not when, and the
+  merged), airline/aircraft tallies and totals — no single flight, never
+  a flight number or a time of day. The map shows where, not when, and the
   payload claims no more than the pages show. Redaction is
   structural: `services/flights/airtrail.ts` types only the upstream fields composition
   reads (PNRs in `note`, seats, gates, registrations and passenger ids are
@@ -339,7 +336,7 @@ production.
   the page wants more rows, change the constant here (a payload change:
   bump `SITE_VERSION`).
 
-## stocks
+## portfolio
 
 - The ledger is **Ghostfolio's** (`GHOSTFOLIO_URL`, self-hosted on the arm
   host; its compose lives in homelab-infra `stacks/ghostfolio`). Activities
@@ -353,7 +350,7 @@ production.
   narrower then fails loudly rather than shipping zeros. It expires
   (`Access.expiresAt`, currently 2027-10); a lapsed grant is a failed
   composition and the last good copy keeps serving.
-- **The payload is returns, never amounts.** `services/stocks/ghostfolio.ts`
+- **The payload is returns, never amounts.** `services/portfolio/ghostfolio.ts`
   types only what composition reads; `compose.ts` turns each chart into a
   time-weighted growth index (`growthIndex`: daily gain over the previous
   close plus that day's money in) and ships that, the holdings' weights,
@@ -392,7 +389,7 @@ production.
   fails the composition.
 - Logos come from logo.dev's ticker lookup (`LOGO_DEV_TOKEN`, a
   publishable key that still never reaches a browser), mirrored once per
-  ticker as `stocks/logos/<TICKER>-96.webp`. Delete the object to pick up
+  ticker as `portfolio/logos/<TICKER>-96.webp`. Delete the object to pick up
   a new logo. `lib/images.ts` logs a failed mirror by key, not source URL,
   because this source carries the key.
 
@@ -416,13 +413,16 @@ production.
 ## now
 
 - The home page's Now tiles. It **reads the other services' stored
-  snapshots** (`read`, any day), music, movies, tokens and flights, and
+  snapshots** (`read`, any day), music, movies, tokens and portfolio, and
   never composes them or asks an upstream: composing a source from here
-  would put that upstream on this service's clock. The flight's airports
-  are named by city from the flights view's own airport list.
+  would put that upstream on this service's clock. Tokens adds the last
+  `TOKENS_DAYS` (14) daily totals for the tile's bars; portfolio is the
+  whole portfolio's index and the benchmark cut to /misc's 3M range
+  (`pickPortfolio`, `shiftMonths` mirroring the page's `rangeCutoff`), so
+  the tile's return is the last value over the first.
 - The heartbeat refreshes it right after music, in one job, so the home
-  page is never a run behind it. Tokens, films and flights (hourly) reach
-  it within five minutes of their own writes.
+  page is never a run behind it. Tokens, films and the portfolio (hourly,
+  at :05) reach it within five minutes of their own writes.
 - Keep the body small and only what the tiles show. It is a KV write
   whenever any field moves, so a field that changes on every tokens
   submission or every listen costs a write each time.

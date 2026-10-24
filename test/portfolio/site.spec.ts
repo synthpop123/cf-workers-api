@@ -1,8 +1,8 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { refresh } from "../../src/lib/snapshot";
-import { stocksSite } from "../../src/services/stocks";
-import { SITE_VERSION } from "../../src/services/stocks/compose";
+import { portfolioSite } from "../../src/services/portfolio";
+import { SITE_VERSION } from "../../src/services/portfolio/compose";
 import { call, captureErrors, imageResponse } from "../helpers";
 
 const ACCESS = "245c4b96-e08b-41f7-9217-28703aaf5fe2";
@@ -111,14 +111,14 @@ function ghostfolio({ failCloses = false } = {}) {
 }
 
 beforeEach(async () => {
-  await env.CACHE.delete(stocksSite.key);
+  await env.CACHE.delete(portfolioSite.key);
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("GET /stocks/site", () => {
+describe("GET /portfolio/site", () => {
   it("composes from Ghostfolio through the grant, with no amount in it", async () => {
     const { asked } = ghostfolio();
-    const response = await call("/stocks/site");
+    const response = await call("/portfolio/site");
     expect(response.status).toBe(200);
     const text = await response.text();
     for (const secret of [
@@ -149,7 +149,7 @@ describe("GET /stocks/site", () => {
       ["MSFT", "stock"],
       ["BOXX", "etf"],
     ]);
-    expect(symbols[0].logo).toBe("https://img.lkwplus.com/stocks/logos/MSFT-96.webp");
+    expect(symbols[0].logo).toBe("https://img.lkwplus.com/portfolio/logos/MSFT-96.webp");
     expect(symbols[1].logo).toBeNull();
     // A fund's sectors are a blend: none is named.
     expect(body.symbols[0]).toMatchObject({
@@ -158,7 +158,7 @@ describe("GET /stocks/site", () => {
       url: "https://www.example.com",
     });
     expect(body.symbols[1]).toMatchObject({ sector: null, country: "US", url: null });
-    expect(await env.IMAGES.head("stocks/logos/MSFT-96.webp")).not.toBeNull();
+    expect(await env.IMAGES.head("portfolio/logos/MSFT-96.webp")).not.toBeNull();
     // The portfolio and each account, once each.
     expect(asked.filter((path) => path.includes("/performance"))).toHaveLength(3);
   });
@@ -166,7 +166,7 @@ describe("GET /stocks/site", () => {
   it("ships a holding whose history fails without its line", async () => {
     const logged = captureErrors();
     ghostfolio({ failCloses: true });
-    const body = await (await call("/stocks/site")).json<{
+    const body = await (await call("/portfolio/site")).json<{
       symbols: { symbol: string; closes: (number | null)[] }[];
     }>();
     expect(body.symbols.find((s) => s.symbol === "BOXX")?.closes).toEqual([null, null, null]);
@@ -177,15 +177,15 @@ describe("GET /stocks/site", () => {
   it("answers 503 when Ghostfolio is down and nothing is stored", async () => {
     const logged = captureErrors();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("down", { status: 502 }));
-    expect((await call("/stocks/site")).status).toBe(503);
+    expect((await call("/portfolio/site")).status).toBe(503);
     expect(logged).toHaveBeenCalled();
   });
 
   it("does not ask logo.dev again for a logo the stored body links", async () => {
     const { asked } = ghostfolio();
-    await refresh(env, stocksSite);
+    await refresh(env, portfolioSite);
     asked.length = 0;
-    await refresh(env, stocksSite);
+    await refresh(env, portfolioSite);
     expect(asked.some((path) => path.startsWith("img.logo.dev/ticker/MSFT"))).toBe(false);
   });
 });

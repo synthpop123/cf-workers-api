@@ -6,7 +6,7 @@
  * snapshot texts by concatenation — no parse, no re-serialization — so it
  * costs five KV reads and a hash:
  *
- *   {"flights":{…},"movies":{…},"music":{…},"stocks":{…},"switch":{…}}
+ *   {"flights":{…},"movies":{…},"music":{…},"portfolio":{…},"switch":{…}}
  *
  * Each section keeps its own `schemaVersion` and its own decoder on the
  * page. A section with nothing to serve is `null`, which fails only that
@@ -19,10 +19,10 @@
 
 import { etagOf } from "./lib/http";
 import { load, serve } from "./lib/snapshot";
-import { flights, movies, music, stocks, switchPlay } from "./services";
+import { flights, movies, music, portfolio, switchPlay } from "./services";
 
 /** The sections, keyed in the bundle by service name. */
-const SECTIONS = [flights, movies, music, stocks, switchPlay];
+const SECTIONS = [flights, movies, music, portfolio, switchPlay];
 
 export async function handleMisc(request: Request, env: Env): Promise<Response> {
   const stored = await Promise.all(SECTIONS.map(({ site }) => load(env, site)));

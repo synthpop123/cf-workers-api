@@ -1,5 +1,5 @@
 /**
- * The pure layer: Ghostfolio's slices in, the public /stocks/site body
+ * The pure layer: Ghostfolio's slices in, the public /portfolio/site body
  * out. No bindings, no clock — `today` is always passed in — so this is
  * where the unit tests live.
  *

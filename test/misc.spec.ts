@@ -4,11 +4,11 @@ import { store } from "../src/lib/snapshot";
 import { flightsSite } from "../src/services/flights";
 import { moviesSite } from "../src/services/movies";
 import { musicSite } from "../src/services/music";
-import { stocksSite } from "../src/services/stocks";
+import { portfolioSite } from "../src/services/portfolio";
 import { switchSite } from "../src/services/switch/site";
 import { call, captureErrors } from "./helpers";
 
-const SNAPSHOTS = [flightsSite, moviesSite, musicSite, stocksSite, switchSite];
+const SNAPSHOTS = [flightsSite, moviesSite, musicSite, portfolioSite, switchSite];
 
 beforeEach(async () => {
   await Promise.all(SNAPSHOTS.map((snapshot) => env.CACHE.delete(snapshot.key)));
@@ -19,7 +19,7 @@ afterEach(() => vi.restoreAllMocks());
 
 const seed = () =>
   Promise.all(
-    [flightsSite, moviesSite, musicSite, stocksSite].map((snapshot) =>
+    [flightsSite, moviesSite, musicSite, portfolioSite].map((snapshot) =>
       store(env, snapshot, JSON.stringify({ schemaVersion: snapshot.version, of: snapshot.key }))
     )
   );
@@ -34,7 +34,7 @@ describe("GET /misc", () => {
       flights: { schemaVersion: flightsSite.version, of: "flights:site" },
       movies: { schemaVersion: moviesSite.version, of: "movies:site" },
       music: { schemaVersion: musicSite.version, of: "music:site" },
-      stocks: { schemaVersion: stocksSite.version, of: "stocks:site" },
+      portfolio: { schemaVersion: portfolioSite.version, of: "portfolio:site" },
       switch: { of: "switch" },
     });
   });

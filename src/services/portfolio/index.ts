@@ -1,7 +1,7 @@
 /**
- * stocks — the owner's portfolio as it is kept in the self-hosted
+ * portfolio — the owner's portfolio as it is kept in the self-hosted
  * Ghostfolio (`GHOSTFOLIO_URL`), served as the returns-only view behind
- * the Stocks section of lkwplus.com/misc: a time-weighted growth index
+ * the Portfolio section of lkwplus.com/misc: a time-weighted growth index
  * per account, what each account holds by weight, and the daily closes of
  * those holdings and of the benchmark (compose.ts).
  *
@@ -30,8 +30,8 @@ import {
 import { connect } from "./ghostfolio";
 import { mirrorBrokers, mirrorLogos } from "./logos";
 
-export const stocksSite: Snapshot = {
-  key: "stocks:site",
+export const portfolioSite: Snapshot = {
+  key: "portfolio:site",
   version: SITE_VERSION,
   compose: async (env, today) => {
     const ghostfolio = await connect(env);
@@ -70,7 +70,7 @@ export const stocksSite: Snapshot = {
       })
     );
 
-    const previous = await read(env, stocksSite);
+    const previous = await read(env, portfolioSite);
     const known = linkedKeys(env, previous?.text);
     const [symbols, brokers] = await Promise.all([
       mirrorLogos(
@@ -91,4 +91,4 @@ export const stocksSite: Snapshot = {
   },
 };
 
-export default { name: "stocks", site: stocksSite } satisfies Service;
+export default { name: "portfolio", site: portfolioSite } satisfies Service;

@@ -2,10 +2,16 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isoToday } from "../../src/lib/http";
 import { store } from "../../src/lib/snapshot";
-import { flightsSite } from "../../src/services/flights";
 import { moviesSite } from "../../src/services/movies";
 import { musicSite } from "../../src/services/music";
-import { nowSite, pickFlight, pickTokens } from "../../src/services/now";
+import {
+  nowSite,
+  pickPortfolio,
+  pickTokens,
+  shiftMonths,
+  TOKENS_DAYS,
+} from "../../src/services/now";
+import { portfolioSite } from "../../src/services/portfolio";
 import { tokensSite } from "../../src/services/tokens/site";
 import { call } from "../helpers";
 
@@ -27,30 +33,23 @@ const FILM = {
   poster: "https://img.test/p.webp",
 };
 
-const FLIGHTS = {
-  airports: [
-    { code: "JNH", city: "Jiaxing" },
-    { code: "PEK", city: "Beijing" },
+/** A portfolio view cut down to what the tile reads: the whole portfolio
+ *  first, an index that starts after the axis does, a benchmark. */
+const PORTFOLIO = {
+  days: ["2026-06-30", "2026-07-01", "2026-07-20", "2026-07-23", "2026-07-24", "2026-10-23"],
+  benchmark: { symbol: "VOO", label: "S&P 500", closes: [600, 601, 610, 612, 615, 650] },
+  accounts: [
+    { id: "all", index: [null, 1, 1.02, 1.05, 1.04, 1.1] },
+    { id: "ibkr", index: [1, 1, 1, 1, 1, 1] },
   ],
-  last: {
-    date: "2026-08-16",
-    from: "JNH",
-    to: "PEK",
-    km: 1142,
-    minutes: 135,
-    airline: "Air China",
-    aircraft: "Airbus A321",
-  },
+  symbols: [],
 };
 
-const FLIGHT = {
-  date: "2026-08-16",
-  from: { code: "JNH", city: "Jiaxing" },
-  to: { code: "PEK", city: "Beijing" },
-  km: 1142,
-  minutes: 135,
-  airline: "Air China",
-  aircraft: "Airbus A321",
+/** From the last session on or before Jul 23, three months before. */
+const PORTFOLIO_TILE = {
+  days: ["2026-07-23", "2026-07-24", "2026-10-23"],
+  index: [1.05, 1.04, 1.1],
+  benchmark: [612, 615, 650],
 };
 
 const seed = async (today: string) => {
@@ -81,39 +80,89 @@ const seed = async (today: string) => {
   );
   await store(
     env,
-    flightsSite,
-    JSON.stringify({ schemaVersion: flightsSite.version, routes: [], ...FLIGHTS })
+    portfolioSite,
+    JSON.stringify({ schemaVersion: portfolioSite.version, today, ...PORTFOLIO })
   );
 };
 
 beforeEach(() =>
   Promise.all(
-    [musicSite, moviesSite, tokensSite, flightsSite, nowSite].map(({ key }) =>
+    [musicSite, moviesSite, tokensSite, portfolioSite, nowSite].map(({ key }) =>
       env.CACHE.delete(key)
     )
   )
 );
 afterEach(() => vi.restoreAllMocks());
 
+const zeros = (n: number) => Array.from({ length: n }, () => 0);
+
 describe("pickTokens", () => {
   it("reads today's entry, a zero when there is none, null with no view", () => {
     const site = { daily: [{ date: "2026-09-27", tokens: 3, cost: 0.5, messages: 2 }] };
-    expect(pickTokens(site, "2026-09-27")).toEqual({ tokens: 3, cost: 0.5, messages: 2 });
-    expect(pickTokens(site, "2026-09-28")).toEqual({ tokens: 0, cost: 0, messages: 0 });
+    expect(pickTokens(site, "2026-09-27")).toEqual({
+      tokens: 3,
+      cost: 0.5,
+      messages: 2,
+      recent: [...zeros(TOKENS_DAYS - 1), 3],
+    });
+    expect(pickTokens(site, "2026-09-28")).toEqual({
+      tokens: 0,
+      cost: 0,
+      messages: 0,
+      recent: [...zeros(TOKENS_DAYS - 2), 3, 0],
+    });
     expect(pickTokens(null, "2026-09-28")).toBeNull();
+  });
+
+  it("keeps the last two weeks, oldest first, dropping anything older", () => {
+    const site = {
+      daily: [
+        { date: "2026-09-13", tokens: 99, cost: 0, messages: 0 },
+        { date: "2026-09-14", tokens: 7, cost: 0, messages: 0 },
+        { date: "2026-09-20", tokens: 5, cost: 0, messages: 0 },
+      ],
+    };
+    const { recent } = pickTokens(site, "2026-09-27")!;
+    expect(recent).toHaveLength(TOKENS_DAYS);
+    expect(recent[0]).toBe(7);
+    expect(recent[6]).toBe(5);
+    expect(recent.reduce((a, b) => a + b)).toBe(12);
   });
 });
 
-describe("pickFlight", () => {
-  it("names each end by its city, null when there is no flight or no view", () => {
-    expect(pickFlight(FLIGHTS as never)).toEqual(FLIGHT);
-    const unknown = { airports: [], last: FLIGHTS.last } as never;
-    expect(pickFlight(unknown)).toMatchObject({
-      from: { code: "JNH", city: null },
-      to: { code: "PEK", city: null },
+describe("shiftMonths", () => {
+  it("clamps to the target month's last day", () => {
+    expect(shiftMonths("2026-10-23", -3)).toBe("2026-07-23");
+    expect(shiftMonths("2026-05-31", -3)).toBe("2026-02-28");
+    expect(shiftMonths("2026-01-15", -3)).toBe("2025-10-15");
+  });
+});
+
+describe("pickPortfolio", () => {
+  it("cuts the whole portfolio to its last three months", () => {
+    expect(pickPortfolio(PORTFOLIO as never)).toEqual(PORTFOLIO_TILE);
+  });
+
+  it("starts where the index does when that is later", () => {
+    const young = {
+      ...PORTFOLIO,
+      accounts: [{ id: "all", index: [null, null, null, null, 1, 1.1] }],
+    };
+    expect(pickPortfolio(young as never)).toEqual({
+      days: ["2026-07-24", "2026-10-23"],
+      index: [1, 1.1],
+      benchmark: [615, 650],
     });
-    expect(pickFlight({ airports: [], last: null } as never)).toBeNull();
-    expect(pickFlight(null)).toBeNull();
+  });
+
+  it("is null with no view, no account or fewer than two days", () => {
+    expect(pickPortfolio(null)).toBeNull();
+    expect(pickPortfolio({ ...PORTFOLIO, accounts: [] } as never)).toBeNull();
+    const fresh = {
+      ...PORTFOLIO,
+      accounts: [{ id: "all", index: [null, null, null, null, null, 1] }],
+    };
+    expect(pickPortfolio(fresh as never)).toBeNull();
   });
 });
 
@@ -129,8 +178,13 @@ describe("GET /now/site", () => {
       today,
       listen: LISTEN,
       film: FILM,
-      tokens: { tokens: 39_700_000, cost: 14.48, messages: 155 },
-      flight: FLIGHT,
+      tokens: {
+        tokens: 39_700_000,
+        cost: 14.48,
+        messages: 155,
+        recent: [...zeros(TOKENS_DAYS - 1), 39_700_000],
+      },
+      portfolio: PORTFOLIO_TILE,
     });
     expect(fetched).not.toHaveBeenCalled();
   });
@@ -138,7 +192,7 @@ describe("GET /now/site", () => {
   it("nulls a source with nothing stored, and never composes one", async () => {
     const fetched = vi.spyOn(globalThis, "fetch");
     const site = await (await call("/now/site")).json();
-    expect(site).toMatchObject({ listen: null, film: null, tokens: null, flight: null });
+    expect(site).toMatchObject({ listen: null, film: null, tokens: null, portfolio: null });
     expect(fetched).not.toHaveBeenCalled();
   });
 });

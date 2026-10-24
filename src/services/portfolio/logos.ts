@@ -1,5 +1,5 @@
 /**
- * Company logos, mirrored into R2 (`stocks/logos/…`) from logo.dev's
+ * Company logos, mirrored into R2 (`portfolio/logos/…`) from logo.dev's
  * ticker lookup, so the holdings table loads them from img.lkwplus.com
  * and no visitor's browser ever asks logo.dev (or carries its key).
  *
@@ -12,7 +12,7 @@
  * lettered placeholder, so the page draws its own monogram instead.
  *
  * Brokers are looked up the same way by the domain of the account's
- * platform in Ghostfolio (`stocks/brokers/<domain>-96.webp`).
+ * platform in Ghostfolio (`portfolio/brokers/<domain>-96.webp`).
  */
 
 import { mirrorImage, publicUrl, type Size } from "../../lib/images";
@@ -23,7 +23,7 @@ const TICKER_RE = /^[A-Z0-9][A-Z0-9.-]{0,15}$/;
 /** The object key for a ticker, or null for one that isn't a plain
  *  exchange ticker (a fund ISIN, a crypto id). */
 export function logoKey(symbol: string): string | null {
-  return TICKER_RE.test(symbol) ? `stocks/logos/${symbol}-${SIZE.width}.webp` : null;
+  return TICKER_RE.test(symbol) ? `portfolio/logos/${symbol}-${SIZE.width}.webp` : null;
 }
 
 const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
@@ -81,7 +81,7 @@ export async function mirrorBrokers(
         id,
         await mirrored(
           env,
-          `stocks/brokers/${domain}-${SIZE.width}.webp`,
+          `portfolio/brokers/${domain}-${SIZE.width}.webp`,
           logoDev(encodeURIComponent(domain), env.LOGO_DEV_TOKEN),
           known
         ),

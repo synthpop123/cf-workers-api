@@ -21,9 +21,6 @@ export interface AirTrailAirport {
 
 export interface AirTrailFlight {
   date: string;
-  /** ISO instant, when known. Read only to order two flights on one day;
-   *  never shipped. */
-  departure?: string | null;
   /** Seconds, gate to gate. */
   duration: number | null;
   from: AirTrailAirport | null;
