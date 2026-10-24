@@ -70,7 +70,7 @@ Reads are public and open to any origin. Every view answers `Cache-Control: no-c
 | `GET /movies/site` | the latest diary entries |
 | `GET /memos/site` | the latest memos, attachments resolved to what renders |
 | `GET /portfolio/site` | growth index and holdings by weight per account, daily closes of the holdings and the benchmark |
-| `GET /now/site` | `{listen, film, tokens, portfolio}`: the latest listen and film, today's token totals with 14 days of bars, the portfolio's 3M index and benchmark |
+| `GET /now/site` | `{listen, film, tokens, portfolio}`: the latest listen and film, today's token totals with 14 days of bars and the week's top model, the portfolio's 3M index and benchmark |
 | `GET /misc` | `{"flights":…,"movies":…,"music":…,"portfolio":…,"switch":…}` — each exactly that service's view, or `null` if it has nothing to serve |
 | `GET /health` | `{"ok":true,"services":[…]}` |
 

@@ -1,7 +1,7 @@
 /**
  * now — the Now section on the lkwplus.com home page: the latest listen,
- * the latest film, token usage today and over the last two weeks, and the
- * portfolio's last three months, in one small body instead of four feeds.
+ * the latest film, token usage today and over the last two weeks with the
+ * week's busiest model, and the portfolio's last three months, in one small body instead of four feeds.
  *
  * All four are already composed elsewhere, so this service fetches
  * nothing: it reads the stored music, movies, tokens and portfolio
@@ -27,7 +27,7 @@ import type { Site as PortfolioSite } from "../portfolio/compose";
 import { portfolioSite } from "../portfolio";
 import { tokensSite } from "../tokens/site";
 
-export const SITE_VERSION = 3;
+export const SITE_VERSION = 4;
 
 /** Days of token totals the tile's bars draw, today last. */
 export const TOKENS_DAYS = 14;
@@ -42,6 +42,10 @@ export interface TokensToday {
   /** Token totals of the last TOKENS_DAYS days, oldest first, the last
    *  one today's (`tokens`); a day with nothing reported is 0. */
   recent: number[];
+  /** The model with the most tokens over the tokens view's week (its
+   *  last seven days, today included) and its share of them, 0–1; null
+   *  when the week has none. The page names the id. */
+  top: { model: string; share: number } | null;
 }
 
 /** The whole portfolio over its last PORTFOLIO_MONTHS: a window of the
@@ -67,6 +71,27 @@ export interface Site {
 
 interface TokensSite {
   daily: { date: string; tokens: number; cost: number; messages: number }[];
+  ranges?: {
+    week?: { totals: { tokens: number }; byModel: { model: string; tokens: number }[] };
+  };
+}
+
+/** Ids the tokens view uses for usage it could not attribute; never the
+ *  answer to "which model". */
+const PLACEHOLDER_MODELS = new Set(["unknown", "<synthetic>"]);
+
+/** The week's busiest model, its share rounded to three places. */
+export function topModel(site: TokensSite): TokensToday["top"] {
+  const week = site.ranges?.week;
+  const total = week?.totals.tokens ?? 0;
+  let best: { model: string; tokens: number } | null = null;
+  for (const row of week?.byModel ?? []) {
+    if (PLACEHOLDER_MODELS.has(row.model) || row.tokens <= 0) continue;
+    if (!best || row.tokens > best.tokens) best = row;
+  }
+  return best && total > 0
+    ? { model: best.model, share: Math.round((best.tokens / total) * 1000) / 1000 }
+    : null;
 }
 
 /** What is stored, of any day: composing a source from here would put
@@ -103,9 +128,10 @@ export function pickTokens(site: TokensSite | null, today: string): TokensToday 
     (_, i) => byDate.get(shiftDays(today, i + 1 - TOKENS_DAYS))?.tokens ?? 0
   );
   const day = byDate.get(today);
+  const top = topModel(site);
   return day
-    ? { tokens: day.tokens, cost: day.cost, messages: day.messages, recent }
-    : { tokens: 0, cost: 0, messages: 0, recent };
+    ? { tokens: day.tokens, cost: day.cost, messages: day.messages, recent, top }
+    : { tokens: 0, cost: 0, messages: 0, recent, top };
 }
 
 /** The same day `months` calendar months away, clamped to that month's

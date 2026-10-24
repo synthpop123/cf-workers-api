@@ -10,6 +10,7 @@ import {
   pickTokens,
   shiftMonths,
   TOKENS_DAYS,
+  topModel,
 } from "../../src/services/now";
 import { portfolioSite } from "../../src/services/portfolio";
 import { tokensSite } from "../../src/services/tokens/site";
@@ -76,6 +77,12 @@ const seed = async (today: string) => {
         { date: "2026-01-01", tokens: 5, cost: 1, messages: 1 },
         { date: today, tokens: 39_700_000, cost: 14.48, messages: 155, clients: {} },
       ],
+      ranges: {
+        week: {
+          totals: { tokens: 40_000_000 },
+          byModel: [{ model: "claude-opus-5-5", tokens: 38_000_000 }],
+        },
+      },
     })
   );
   await store(
@@ -104,12 +111,14 @@ describe("pickTokens", () => {
       cost: 0.5,
       messages: 2,
       recent: [...zeros(TOKENS_DAYS - 1), 3],
+      top: null,
     });
     expect(pickTokens(site, "2026-09-28")).toEqual({
       tokens: 0,
       cost: 0,
       messages: 0,
       recent: [...zeros(TOKENS_DAYS - 2), 3, 0],
+      top: null,
     });
     expect(pickTokens(null, "2026-09-28")).toBeNull();
   });
@@ -127,6 +136,31 @@ describe("pickTokens", () => {
     expect(recent[0]).toBe(7);
     expect(recent[6]).toBe(5);
     expect(recent.reduce((a, b) => a + b)).toBe(12);
+  });
+});
+
+describe("topModel", () => {
+  const site = (byModel: { model: string; tokens: number }[], total: number) => ({
+    daily: [],
+    ranges: { week: { totals: { tokens: total }, byModel } },
+  });
+
+  it("names the week's busiest model and its share of every token", () => {
+    const week = site(
+      [
+        { model: "deepseek-v4.1-flash", tokens: 10 },
+        { model: "claude-opus-5-5", tokens: 981 },
+        { model: "unknown", tokens: 5000 },
+      ],
+      1000
+    );
+    expect(topModel(week)).toEqual({ model: "claude-opus-5-5", share: 0.981 });
+  });
+
+  it("is null for a quiet week or a view without one", () => {
+    expect(topModel(site([], 0))).toBeNull();
+    expect(topModel(site([{ model: "<synthetic>", tokens: 9 }], 9))).toBeNull();
+    expect(topModel({ daily: [] })).toBeNull();
   });
 });
 
@@ -183,6 +217,7 @@ describe("GET /now/site", () => {
         cost: 14.48,
         messages: 155,
         recent: [...zeros(TOKENS_DAYS - 1), 39_700_000],
+        top: { model: "claude-opus-5-5", share: 0.95 },
       },
       portfolio: PORTFOLIO_TILE,
     });

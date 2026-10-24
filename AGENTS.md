@@ -416,7 +416,8 @@ production.
   snapshots** (`read`, any day), music, movies, tokens and portfolio, and
   never composes them or asks an upstream: composing a source from here
   would put that upstream on this service's clock. Tokens adds the last
-  `TOKENS_DAYS` (14) daily totals for the tile's bars; portfolio is the
+  `TOKENS_DAYS` (14) daily totals for the tile's bars and `top`, the week
+  range's busiest model (placeholder ids skipped) with its share; portfolio is the
   whole portfolio's index and the benchmark cut to /misc's 3M range
   (`pickPortfolio`, `shiftMonths` mirroring the page's `rangeCutoff`), so
   the tile's return is the last value over the first.
