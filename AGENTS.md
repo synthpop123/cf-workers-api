@@ -148,10 +148,13 @@ production.
   itself (`/tokens/site`, `/tokens/quota/:plan`) sit directly under
   `/tokens`. The quota collectors read the same variable.
 - The subscription quota cards are **reported, not derived**: one host
-  (OracleARM, two systemd user timers) reports Codex via
-  `scripts/tokens/report-codex-quota.sh` (`tokens codex status --json`) and
+  (OracleARM, three systemd user timers) reports Codex via
+  `scripts/tokens/report-codex-quota.sh` (`tokens codex status --json`),
   Claude via `scripts/tokens/report-claude-quota.py` (Anthropic's
-  `/api/oauth/usage`), so no OAuth credential ever leaves that box and
+  `/api/oauth/usage`) and OpenCode Go via
+  `scripts/tokens/report-opencode-quota.sh` (`opencode.ai/zen/go/v1/usage`
+  with an API key in `~/.config/tokens/opencode-api-key`), so no vendor
+  credential ever leaves that box and
   the tokens service needs no scheduled job. Four rules hold it together: each vendor's
   body is narrowed by hand in `services/tokens/quota-registry.ts`, the one place a
   provider is declared — id, vendor, label and narrower together, read by
@@ -174,20 +177,19 @@ production.
   quota that refills. Anthropic names the field `resets_at`; the narrower
   publishes it as `expiresAt` and the page says "expires".
 - On that host (install and supervision: `docs/tokens-reporters.md`) the
-  `agent` user runs **three** units, not two: the two quota timers
-  above, plus a long-lived `tokens-serve.service` that submits this
-  device's usage every 30 minutes. So after replacing
-  `/usr/local/bin/tokens` there, always
+  `agent` user runs the three quota timers above, plus a long-lived
+  `tokens-serve.service` that submits this device's usage every 30
+  minutes. So after replacing `/usr/local/bin/tokens` there, always
   `systemctl --user restart tokens-serve.service`. The timers re-exec the
-  binary per run and pick a new version up on their own; the serve
-  process does not — it spawns each submit through `/proc/self/exe`, and
+  binary per run and pick a new version up on their own; the serve process
+  does not — it spawns each submit through `/proc/self/exe`, and
   installing over the binary unlinks the inode it is holding, so every
   submit fails `No such file or directory (os error 2)` until restart
-  while the process itself stays `active (running)`. Two corollaries:
-  the version on the dashboard's device card is self-reported by the
-  serve process, so it keeps showing the *old* version — that stale
-  number is the symptom, not a packaging bug; and `systemctl --user list-timers` does
-  not list services, so enumerate with `list-units --all "*token*"`
+  while the process itself stays `active (running)`. Two corollaries: the
+  version on the dashboard's device card is self-reported by the serve
+  process, so it keeps showing the *old* version — that stale number is
+  the symptom, not a packaging bug; and `systemctl --user list-timers`
+  does not list services, so enumerate with `list-units --all "*token*"`
   before concluding nothing needs a restart.
 - Three devices submit — `OracleARM`, `UbuntuPC`, `MacbookPro` — so the
   `tokens serve` restart above applies per host, under a different unit

@@ -1,0 +1,11 @@
+[Unit]
+Description=report the OpenCode Go subscription quota to api.lkwplus.com/tokens
+Documentation=https://github.com/synthpop123/cf-workers-api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/report-opencode-quota.sh
+Environment=TOKENS_API_URL=https://api.lkwplus.com/tokens
+Environment=TZ=Asia/Shanghai

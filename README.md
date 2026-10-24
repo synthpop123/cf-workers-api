@@ -81,7 +81,7 @@ Writes take a bearer token:
 | `POST /tokens/api/submit` | `TOKENS_API_TOKEN` | a CLI submission |
 | `GET /tokens/api/auth/token` | `TOKENS_API_TOKEN` | `tokens login --token` |
 | `DELETE /tokens/api/settings/submitted-data` | `TOKENS_API_TOKEN` | wipe everything the account submitted |
-| `POST /tokens/quota/{codex,claude}` | `TOKENS_API_TOKEN` | a subscription quota report |
+| `POST /tokens/quota/{codex,claude,opencode}` | `TOKENS_API_TOKEN` | a subscription quota report |
 | `POST /switch/sync` | `SWITCH_API_TOKEN` | run the Switch sync now |
 
 The CLI joins its base URL with `/api/…`, so reporters run with `TOKENS_API_URL=https://api.lkwplus.com/tokens` and those three routes land under `/tokens/api/` verbatim. Everything this Worker names itself sits directly under the service prefix.

@@ -5,7 +5,7 @@
  * Three properties carry this endpoint. Each vendor's body is narrowed
  * into a shape this Worker owns, so the fields it is supposed to drop
  * are asserted absent by name — account identity above all, since
- * /tokens/site is public and unauthenticated. The two plans are stored
+ * /tokens/site is public and unauthenticated. The plans are stored
  * in their own rows, so one collector failing must not disturb the
  * other's card. And a plan has to survive the writes that know nothing
  * about it: an ordinary submission recomposes the payload and must carry
@@ -18,8 +18,10 @@ import {
   AUTH,
   call,
   claudeQuotaPayload,
+  openCodeQuotaPayload,
   quotaPayload,
   reportClaudeQuota,
+  reportOpenCodeQuota,
   reportQuota,
   reset,
   submit,
@@ -227,12 +229,52 @@ describe("POST /tokens/quota/claude", () => {
   });
 });
 
+describe("POST /tokens/quota/opencode", () => {
+  it("narrows the OpenCode Go usage response", async () => {
+    const response = await reportOpenCodeQuota();
+    expect(response.status).toBe(200);
+
+    expect(await planOf("opencode")).toMatchObject({
+      provider: "opencode",
+      label: "OpenCode",
+      // The route answers only for Go; the body never names the tier.
+      plan: "Go",
+      windows: [
+        { label: "Session", usedPercent: 0, resetsAt: "2026-10-24T07:04:17.179Z", breakdown: [] },
+        // Rate-limited is spent, whatever the percent beside it says.
+        { label: "Weekly", usedPercent: 100, resetsAt: "2026-10-26T00:00:00.000Z", breakdown: [] },
+        { label: "Monthly", usedPercent: 41, resetsAt: "2026-11-23T10:05:46.000Z", breakdown: [] },
+      ],
+      allowances: [],
+      resetCredits: [],
+      extraUsage: null,
+    });
+  });
+
+  it("costs a window an unknown status, not the reading", async () => {
+    const payload = openCodeQuotaPayload();
+    payload.usage.weekly.status = "paused";
+    delete payload.usage.monthly;
+    await reportOpenCodeQuota(payload);
+    expect((await planOf("opencode")).windows.map((w: any) => w.label)).toEqual(["Session"]);
+  });
+
+  it("drops the vendor's own field names", async () => {
+    await reportOpenCodeQuota();
+    const body = await (await call("/tokens/site")).text();
+    for (const key of ["rolling", "rate-limited", '"percent"', '"status"']) {
+      expect(body, key).not.toContain(key);
+    }
+  });
+});
+
 describe("the two collectors are independent", () => {
-  it("keeps both plans, in provider order", async () => {
+  it("keeps every plan, in registry order", async () => {
+    await reportOpenCodeQuota();
     await reportClaudeQuota();
     await reportQuota();
     const { quota } = await site();
-    expect(quota.map((plan: any) => plan.provider)).toEqual(["openai", "anthropic"]);
+    expect(quota.map((plan: any) => plan.provider)).toEqual(["openai", "anthropic", "opencode"]);
   });
 
   it("lets one leg go stale without disturbing the other", async () => {
@@ -276,6 +318,16 @@ describe("rejections", () => {
     ],
     ["an Anthropic body with no windows", "claude", JSON.stringify({ plan: "pro" })],
     ["a JSON array", "claude", JSON.stringify([1, 2])],
+    [
+      "an OpenCode body that is not the usage response",
+      "opencode",
+      JSON.stringify({ rolling: {} }),
+    ],
+    [
+      "an OpenCode body with no known status",
+      "opencode",
+      JSON.stringify({ usage: { weekly: { status: "nope", percent: 1, resetsAt: null } } }),
+    ],
   ])("rejects %s", async (_name, provider, body) => {
     const response = await call(`/tokens/quota/${provider}`, {
       method: "POST",
@@ -296,8 +348,9 @@ describe("a plan's life beside the usage matrix", () => {
   it("survives submissions, which know nothing about it", async () => {
     await reportQuota();
     await reportClaudeQuota();
+    await reportOpenCodeQuota();
     await submit();
-    expect((await site()).quota).toHaveLength(2);
+    expect((await site()).quota).toHaveLength(3);
   });
 
   it("survives a day rollover recompose", async () => {

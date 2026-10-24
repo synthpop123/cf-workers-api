@@ -3,7 +3,7 @@
 Every machine whose AI-agent usage should count runs the
 [`tokens`](https://github.com/missuo/tokens) CLI as a long-lived `tokens serve`,
 which rescans the local session logs and submits them every
-`TOKENS_SUBMIT_INTERVAL` minutes. One machine may additionally run the two
+`TOKENS_SUBMIT_INTERVAL` minutes. One machine may additionally run the three
 quota collectors. This is how to set either up, and the operational traps
 that have actually bitten.
 
@@ -174,20 +174,30 @@ holds the Codex and Claude credentials:
 ```sh
 install -Dm755 scripts/tokens/report-codex-quota.sh ~/.local/bin/report-codex-quota.sh
 install -Dm755 scripts/tokens/report-claude-quota.py ~/.local/bin/report-claude-quota.py
+install -Dm755 scripts/tokens/report-opencode-quota.sh ~/.local/bin/report-opencode-quota.sh
 install -Dm644 scripts/tokens/tokens-quota-*.{service,timer} -t ~/.config/systemd/user/
+install -m600 /dev/stdin ~/.config/tokens/opencode-api-key   # paste the key, then ^D
 systemctl --user daemon-reload
-systemctl --user enable --now tokens-quota-codex.timer tokens-quota-claude.timer
+systemctl --user enable --now tokens-quota-{codex,claude,opencode}.timer
 ```
 
-Both read the bearer token from the CLI's credentials file and report every
-30 minutes to `POST /tokens/quota/{codex,claude}`, each to its own route and
-its own stored plan, so an expired credential on one leg leaves the other's
-card current. The Worker only ever sees percentages and timestamps.
+All three read the bearer token from the CLI's credentials file and report
+every 30 minutes to `POST /tokens/quota/{codex,claude,opencode}`, each to its
+own route and its own stored plan, so an expired credential on one leg leaves
+the others' cards current. The Worker only ever sees percentages and
+timestamps.
 
 | Plan | Collector | Reaches the vendor via |
 |---|---|---|
 | Codex | `report-codex-quota.sh` | `tokens codex status --json`, which reads and refreshes `~/.codex/auth.json` |
 | Claude | `report-claude-quota.py` | `api.anthropic.com/api/oauth/usage` with `~/.claude/.credentials.json` |
+| OpenCode Go | `report-opencode-quota.sh` | `opencode.ai/zen/go/v1/usage` with the API key in `~/.config/tokens/opencode-api-key` |
+
+**The OpenCode key spends the plan.** It is the same kind of API key that
+runs inference against Go, not a read-only token, so it lives in a 0600 file
+and goes to curl through a header file, never argv. It does not expire; a revoked key
+is a 401, a workspace without Go a 403, and either leaves the card aging
+until the key is replaced.
 
 **The Claude credential can be destroyed by a careless refresh.** Anthropic
 rotates the refresh token on every exchange — the old one dies the moment a

@@ -7,15 +7,17 @@
  * leaves the machine that holds it. One collector (OracleARM, the box
  * that already runs `tokens serve`) reports each plan on its own timer:
  *
- *   Codex   `tokens codex status --json`, which reads ~/.codex/auth.json,
- *           refreshes the OAuth token if it must, and asks ChatGPT.
- *   Claude  api.anthropic.com/api/oauth/usage with the OAuth token in
- *           ~/.claude/.credentials.json, refreshed by the collector.
+ *   Codex     `tokens codex status --json`, which reads ~/.codex/auth.json,
+ *             refreshes the OAuth token if it must, and asks ChatGPT.
+ *   Claude    api.anthropic.com/api/oauth/usage with the OAuth token in
+ *             ~/.claude/.credentials.json, refreshed by the collector.
+ *   OpenCode  opencode.ai/zen/go/v1/usage with an OpenCode API key kept
+ *             in a 0600 file on that host.
  *
  * This Worker sees percentages and timestamps and nothing else — which
  * also means it needs no vendor secrets of its own and no scheduled job.
  *
- * **One provider per request, stored in its own row.** The two legs
+ * **One provider per request, stored in its own row.** The legs
  * fail independently — an expired Claude credential must not take the
  * Codex card down with it — so each report overwrites only its own
  * `quota_plans` row and each plan carries its own `capturedAt`. A

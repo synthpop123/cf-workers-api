@@ -26,6 +26,10 @@ describe("auth boundaries", () => {
       "POST /tokens/quota/claude",
       () => call("/tokens/quota/claude", { method: "POST", body: "{}" }),
     ],
+    [
+      "POST /tokens/quota/opencode",
+      () => call("/tokens/quota/opencode", { method: "POST", body: "{}" }),
+    ],
   ])("%s rejects missing tokens", async (_name, request) => {
     const response = await request();
     expect(response.status).toBe(401);

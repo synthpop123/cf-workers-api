@@ -212,6 +212,21 @@ export function claudeQuotaPayload(): Record<string, unknown> {
   };
 }
 
+/**
+ * opencode.ai/zen/go/v1/usage, as captured live: the five-hour `rolling`
+ * window untouched (its reset is a placeholder, now + 5h), the weekly
+ * one rate-limited with a stale percent beside it.
+ */
+export function openCodeQuotaPayload(): Record<string, any> {
+  return {
+    usage: {
+      rolling: { status: "ok", percent: 0, resetsAt: "2026-10-24T07:04:17.179Z" },
+      weekly: { status: "rate-limited", percent: 97, resetsAt: "2026-10-26T00:00:00.000Z" },
+      monthly: { status: "ok", percent: 41, resetsAt: "2026-11-23T10:05:46.000Z" },
+    },
+  };
+}
+
 export function reportQuota(
   payload: unknown = quotaPayload(),
   provider = "codex"
@@ -225,3 +240,6 @@ export function reportQuota(
 
 export const reportClaudeQuota = (payload: unknown = claudeQuotaPayload()) =>
   reportQuota(payload, "claude");
+
+export const reportOpenCodeQuota = (payload: unknown = openCodeQuotaPayload()) =>
+  reportQuota(payload, "opencode");

@@ -263,6 +263,42 @@ const narrowClaude: Narrow = (body) => {
   return { plan: tierOf(body.plan), windows, allowances, resetCredits: [], extraUsage };
 };
 
+/** OpenCode Go's three windows, in card order. `rolling` is a five-hour
+ *  window (the OpenCode Console's meter for it is `fiveHour`), so it
+ *  takes the name the other cards give theirs. */
+const OPENCODE_GO_WINDOWS = [
+  ["rolling", "Session"],
+  ["weekly", "Weekly"],
+  ["monthly", "Monthly"],
+] as const;
+
+/**
+ * opencode.ai/zen/go/v1/usage — `{usage: {rolling, weekly, monthly}}`,
+ * each `{status, percent, resetsAt}`. The route sits under `/zen/go/`
+ * and answers only for a Go subscription (anything else is a 403), so
+ * the tier is the route's, not the body's. A window the vendor reports
+ * as `rate-limited` is spent whatever its percent says; any other
+ * status is a shape this does not know and costs that window. The body
+ * carries no identity — the API key is the only thing that names the
+ * account, and it never leaves the collector.
+ */
+const narrowOpenCodeGo: Narrow = (body) => {
+  if (!isRecord(body.usage)) return "Expected the OpenCode Go usage response: {usage: {…}}";
+  const usage = body.usage;
+
+  const windows: QuotaWindow[] = [];
+  for (const [key, label] of OPENCODE_GO_WINDOWS) {
+    const window = usage[key];
+    if (!isRecord(window)) continue;
+    if (window.status !== "ok" && window.status !== "rate-limited") continue;
+    const used = window.status === "rate-limited" ? 100 : window.percent;
+    const narrowed = toWindow(label, used, window.resetsAt);
+    if (narrowed) windows.push(narrowed);
+  }
+
+  return { plan: "Go", windows, allowances: [], resetCredits: [], extraUsage: null };
+};
+
 /**
  * Keyed by the id a collector reports in the path (`/tokens/quota/codex`).
  * A Map, not an object: the key comes from a request. `provider` is the
@@ -274,5 +310,6 @@ export const QUOTA_PROVIDERS = new Map<string, { provider: string; label: string
   [
     ["codex", { provider: "openai", label: "Codex", narrow: narrowCodex }],
     ["claude", { provider: "anthropic", label: "Claude", narrow: narrowClaude }],
+    ["opencode", { provider: "opencode", label: "OpenCode", narrow: narrowOpenCodeGo }],
   ]
 );
