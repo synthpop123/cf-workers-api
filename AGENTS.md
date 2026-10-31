@@ -85,11 +85,12 @@ production.
   and the recommended lint rules, warnings fatal, tests exempt from
   `noNonNullAssertion`/`noExplicitAny` + `tsc -p test` (TypeScript 7)
   over src and tests + `vitest run` inside workerd via
-  `@cloudflare/vitest-pool-workers`, against real miniflare-backed
-  D1/KV/R2). GitHub Actions runs the same gate. `npm run format` fixes
-  formatting. The compatibility date cannot be newer than the workerd
-  bundled with the test pool supports — bump the pool first. Vitest stays
-  on 4 until the pool's peer range allows 5.
+  `@cloudflare/vitest-plugin` (formerly `@cloudflare/vitest-pool-workers`),
+  against real miniflare-backed D1/KV/R2). GitHub Actions runs the same
+  gate. `npm run format` fixes formatting; Markdown is not formatted. The
+  compatibility date cannot be newer than the workerd bundled with the
+  plugin supports — bump the plugin first. Vitest majors move by hand,
+  with the plugin (its peer range allows 4 and 5).
 - Bindings, vars **and secrets** come from `wrangler.jsonc` through
   `wrangler types` (secrets via `secrets.required`), so `Env` is
   `Cloudflare.Env` and nothing hand-maintains a binding list. Config is

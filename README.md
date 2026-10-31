@@ -141,7 +141,7 @@ npm run check                    # types + format/lint + typecheck + tests
 npm run format                   # Biome
 ```
 
-Tests run inside `workerd` through [`@cloudflare/vitest-pool-workers`](https://developers.cloudflare.com/workers/testing/vitest-integration/) against real (Miniflare-backed) D1, KV and R2, with migrations applied per test file. Every upstream is mocked; nothing leaves the machine.
+Tests run inside `workerd` through [`@cloudflare/vitest-plugin`](https://developers.cloudflare.com/workers/testing/vitest-integration/) against real (Miniflare-backed) D1, KV and R2, with migrations applied per test file. Every upstream is mocked; nothing leaves the machine.
 
 ```
 src/

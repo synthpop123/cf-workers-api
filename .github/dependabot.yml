@@ -11,9 +11,9 @@ updates:
         patterns: ["*"]
         exclude-patterns: ["wrangler", "@cloudflare/*"]
     ignore:
-      # Held by @cloudflare/vitest-pool-workers' peer range, and a new
-      # TypeScript major can outrun what wrangler/workers-types support;
-      # both move when the Cloudflare packages do, by hand.
+      # A Vitest major must fit @cloudflare/vitest-plugin's peer range, and
+      # a new TypeScript major can outrun what wrangler/workers-types
+      # support; both move when the Cloudflare packages do, by hand.
       - dependency-name: vitest
         update-types: ["version-update:semver-major"]
       - dependency-name: typescript
