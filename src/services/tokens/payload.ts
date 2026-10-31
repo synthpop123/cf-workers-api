@@ -118,7 +118,7 @@ export function asNonNegativeInt(value: unknown): number {
 
 export function asNonNegativeNumber(value: unknown): number {
   const n = typeof value === "number" && Number.isFinite(value) ? value : 0;
-  return n >= 0 ? n : 0;
+  return Math.max(n, 0);
 }
 
 function aliasClient(id: unknown): unknown {

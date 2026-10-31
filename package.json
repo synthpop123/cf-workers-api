@@ -27,10 +27,10 @@
     "check": "npm run types && npm run lint && tsc -p test --noEmit && vitest run"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
+    "@biomejs/biome": "2.6.3",
     "@cloudflare/vitest-pool-workers": "^0.23.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.12",
     "wrangler": "^4.154.0"
   },
   "allowScripts": {
