@@ -1,7 +1,9 @@
+Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
 Copyright (c) Vercel, Inc.
 
-Geist Variable and Geist Mono Variable (the "Fonts") are bundled under the
-SIL Open Font License, Version 1.1. Source: https://vercel.com/font
+Inter Variable (https://rsms.me/inter) and Geist Mono Variable
+(https://vercel.com/font), both subset as on lkwplus.com, are bundled under
+the SIL Open Font License, Version 1.1.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
