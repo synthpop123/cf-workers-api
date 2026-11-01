@@ -5,25 +5,51 @@ name: CI
 # generation, Biome format + lint, typecheck (src and tests) and the vitest
 # suite. A red run on main means the deploy Workers Builds ran in parallel
 # was a regression; pull requests get the verdict before merging.
+#
+# The gate is split across machines for speed, not trimmed: `static` runs
+# the first three steps of `npm run check`, and `test` runs the vitest suite
+# in shards. Each test file pays ~1s of workerd start-up on a 2-vCPU
+# runner, while the tests themselves take ~2s in total, so the suite scales
+# with machines. `--no-isolate` would be faster still, but it makes test
+# files share storage, which the deploy build does not do.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
   pull_request:
+    # Markdown is neither formatted nor linted (biome.json), so a
+    # docs-only change has nothing to check. No check is required by a
+    # branch rule, so a skipped run cannot hold a pull request open.
+    paths-ignore: ["**.md", "docs/**", "LICENSE"]
+
+# A newer push to a pull request cancels the run it supersedes. Every
+# commit on main is a deploy and gets a complete run of its own.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  check:
+  static:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      # Third-party actions are pinned to commit SHAs; mutable tags
-      # could be repointed at malicious code.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run check
+      - uses: ./.github/actions/setup
+      - run: npm run types
+      - run: npm run lint
+      - run: npx tsc -p test --noEmit
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: npx vitest run --shard=${{ matrix.shard }}/4 --maxWorkers=2

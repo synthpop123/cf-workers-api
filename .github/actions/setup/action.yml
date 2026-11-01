@@ -1,0 +1,23 @@
+name: Setup
+description: Node 24 and node_modules, restored whole when the lockfile is unchanged
+
+runs:
+  using: composite
+  steps:
+    # Third-party actions are pinned to commit SHAs; mutable tags
+    # could be repointed at malicious code.
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 24
+    # node_modules itself, not npm's download cache: restoring it skips
+    # `npm ci` (and workerd's install script) entirely. The key is the
+    # lockfile and the Node major, so a hit is what `npm ci` would
+    # have produced; a miss installs from scratch.
+    - id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: node_modules
+        key: node-modules-${{ runner.os }}-${{ runner.arch }}-node24-${{ hashFiles('package-lock.json') }}
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci

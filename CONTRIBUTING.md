@@ -11,8 +11,10 @@ cp .dev.vars.example .dev.vars
 npm run check      # wrangler types, Biome format + lint, tsc, vitest
 ```
 
-`npm run check` is exactly what CI and the deploy build run; a pull request
-should pass it. Run `npm run format` to fix formatting.
+`npm run check` is exactly what the deploy build runs, and CI runs the same
+steps split across parallel jobs (`.github/workflows/ci.yml`); a pull request
+should pass it. A step added to `check` goes into that workflow too. Run
+`npm run format` to fix formatting.
 
 ## Commits
 

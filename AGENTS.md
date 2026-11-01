@@ -87,7 +87,8 @@ production.
   over src and tests + `vitest run` inside workerd via
   `@cloudflare/vitest-plugin` (formerly `@cloudflare/vitest-pool-workers`),
   against real miniflare-backed D1/KV/R2). GitHub Actions runs the same
-  gate. `npm run format` fixes formatting; Markdown is not formatted. The
+  gate, split into a static job and four vitest shards (keep `ci.yml` in
+  step with the `check` script). `npm run format` fixes formatting; Markdown is not formatted. The
   compatibility date cannot be newer than the workerd bundled with the
   plugin supports — bump the plugin first. Vitest majors move by hand,
   with the plugin (its peer range allows 4 and 5).
