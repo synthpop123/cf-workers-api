@@ -357,10 +357,12 @@ production.
   time-weighted growth index (`growthIndex`: daily gain over the previous
   close plus that day's money in) and ships that, the holdings' weights,
   cash's weight, and public closes. Ghostfolio's own percentages (ROAI,
-  ROI, whichever the owner picks in its settings) are deliberately not
-  read for the index: neither chains day to day, so neither can be cut to
-  a range or set beside an index. The tests pin that no amount reaches
-  the body.
+  ROI) are deliberately not read for the index: neither chains day to
+  day, so neither can be cut to a range or set beside an index. The one
+  read is each holding's lifetime `performance`, under the owner's
+  calculation setting, kept at **ROI** (gain over the sum of the buys;
+  ROAI's time-weighted denominator inflates a recently built position).
+  The tests pin that no amount reaches the body.
 - Per position it also ships the **average price paid per share**
   (`cost`: investment over quantity, divided in `ghostfolio.ts` so neither
   leaves it, at today's valuation rate) and the first buy's day

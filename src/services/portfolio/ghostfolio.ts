@@ -14,9 +14,10 @@
  * (a holding's investment over its quantity, divided here, so neither
  * leaves this file).
  *
- * Ghostfolio's own percentages (ROAI, ROI) are not read at all: neither
- * chains from day to day, so neither can be cut to a range or compared
- * with an index.
+ * Ghostfolio's own percentages (ROAI, ROI) are not read for the growth
+ * index: neither chains from day to day, so neither can be cut to a range
+ * or compared with an index. A holding's lifetime return is the one
+ * exception (`GfHolding.performance`).
  */
 
 import { fetchOk, TIME_ZONE } from "../../lib/http";
@@ -58,8 +59,10 @@ export interface GfHolding {
   /** Share of the (filtered) portfolio, 0–1. */
   weight: number;
   /** The position's return over its whole life, as Ghostfolio reports it
-   *  under the owner's chosen calculation (ROI, ROAI): realised and
-   *  unrealised gain, dividends and fees, in the base currency. */
+   *  under the owner's calculation setting, which is ROI: realised and
+   *  unrealised gain, dividends and fees, in the base currency, over the
+   *  sum of the buys. ROAI would divide by a time-weighted average
+   *  investment instead, which inflates a position built up recently. */
   performance: number | null;
   /** Average price paid per share, in `currency`: what went in over the
    *  shares held, converted at the rate the holding is valued at today.
