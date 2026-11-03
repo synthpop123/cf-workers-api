@@ -6,7 +6,8 @@
  * What ships is how the portfolio moved, never what it is worth: a growth
  * index per account (the time-weighted return, 1 at the account's first
  * day), each holding's share of its account, and the public daily closes
- * of the holdings and of the benchmark, and per position the average
+ * of the holdings and of the benchmark, each account's best days, and per
+ * position the average
  * price paid per share and the day it was first bought. No amount,
  * quantity or individual trade is in it, and none can be derived from
  * it: an index is blind to money moving in and out by construction, and
@@ -28,7 +29,7 @@
 import { DATE_RE } from "../../lib/http";
 import type { GfAccount, GfCloses, GfDay, GfHolding } from "./ghostfolio";
 
-export const SITE_VERSION = 3;
+export const SITE_VERSION = 4;
 
 /** What the page compares the portfolio with: an S&P 500 fund's closes
  *  (price return, so it slightly understates the index with dividends). */
@@ -129,10 +130,18 @@ export interface SiteAccount {
   logo: string | null;
   /** Growth index on `days`: 1 on the account's first day, null before. */
   index: (number | null)[];
+  /** Its best days on record (`bestDays`), newest first. */
+  best: SiteMove[];
   /** Most weight first; cash is `cash`, not a holding. */
   holdings: SiteHolding[];
   /** Most weight first. */
   cash: SiteCash[];
+}
+
+/** One market day's move of a growth index. */
+export interface SiteMove {
+  date: string;
+  change: number;
 }
 
 export interface SiteSymbol {
@@ -230,6 +239,28 @@ export function axis(indexed: string[]): string[] {
     (day, i) =>
       i === 0 || day >= cutoff || i === days.length - 1 || weekOf(day) !== weekOf(days[i + 1])
   );
+}
+
+/**
+ * The best days on record, newest first: walking back from the latest
+ * session, each day that beat every one after it. The best day after any
+ * session is then the earliest of these dated after it, so the page finds
+ * a range's best day with one lookup, at daily resolution even where the
+ * axis has thinned to weekly. Weekends drop out as they do from the axis,
+ * so a move made over one counts on the Monday.
+ */
+export function bestDays(index: Map<string, number>): SiteMove[] {
+  const days = [...index].filter(([day], i) => i === 0 || isWeekday(day));
+  const best: SiteMove[] = [];
+  let top = Number.NEGATIVE_INFINITY;
+  for (let i = days.length - 1; i > 0; i--) {
+    const change = days[i][1] / days[i - 1][1] - 1;
+    if (change > top) {
+      top = change;
+      best.push({ date: days[i][0], change: roundIndex(change) });
+    }
+  }
+  return best;
 }
 
 /** Six decimals: a growth index, below any return the page prints. */
@@ -359,6 +390,7 @@ export function composeSite(
       name: "All accounts",
       logo: null,
       index: alignIndex(days, whole),
+      best: bestDays(whole),
       ...weigh(upstream.portfolio.holdings),
     },
   ];
@@ -371,6 +403,7 @@ export function composeSite(
       name: account.name,
       logo: logos.accounts.get(account.id) ?? null,
       index: alignIndex(days, index),
+      best: bestDays(index),
       ...weighed,
     });
   }

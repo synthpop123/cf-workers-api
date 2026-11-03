@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   alignCloses,
   axis,
+  bestDays,
   composeSite,
   DAILY_DAYS,
   growthIndex,
@@ -95,6 +96,37 @@ describe("growthIndex", () => {
 
   it("is empty for an account that never held anything", () => {
     expect(growthIndex([day("2026-01-01", 0, 0), day("2026-01-02", 0, 0)]).size).toBe(0);
+  });
+});
+
+describe("bestDays", () => {
+  it("walks back keeping each day that beat every one after it", () => {
+    const best = bestDays(
+      new Map([
+        ["2026-01-01", 1],
+        ["2026-01-02", 1.05], // +5%
+        ["2026-01-05", 1.05 * 0.98], // −2%
+        ["2026-01-06", 1.05 * 0.98 * 1.03], // +3%
+        ["2026-01-07", 1.05 * 0.98 * 1.03 * 1.01], // +1%
+      ])
+    );
+    expect(best.map(({ date }) => date)).toEqual(["2026-01-07", "2026-01-06", "2026-01-02"]);
+    expect(best.map(({ change }) => change)).toEqual([0.01, 0.03, 0.05]);
+  });
+
+  it("counts a weekend's move on the Monday", () => {
+    const best = bestDays(
+      new Map([
+        ["2026-01-02", 1], // Friday
+        ["2026-01-03", 1.1], // Saturday
+        ["2026-01-05", 1.21], // Monday
+      ])
+    );
+    expect(best).toEqual([{ date: "2026-01-05", change: 0.21 }]);
+  });
+
+  it("is empty with no day after the base", () => {
+    expect(bestDays(new Map([["2026-01-01", 1]]))).toEqual([]);
   });
 });
 
@@ -252,6 +284,7 @@ describe("composeSite", () => {
     ]);
     expect(site.accounts[0]).toMatchObject({
       index: [1, 1, 1.1],
+      best: [{ date: "2026-01-05", change: 0.1 }],
       logo: null,
       holdings: [
         { symbol: "MSFT", weight: 0.9, performance: 0.25, cost: 400, since: "2026-01-02" },
