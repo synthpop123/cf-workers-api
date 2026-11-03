@@ -386,6 +386,12 @@ production.
   `marketSession(now)` on into that session; holiday calendars are not
   modelled. Weekends drop off the axis; days older than `DAILY_DAYS` thin
   to one a week.
+- Each account also ships its **best days** (`best`, `bestDays`): newest
+  first, every session whose move beat all the ones after it, read off
+  the daily index before the axis thins it. The page's Best day for a
+  range is the earliest entry dated after the range's start, so any range
+  (ALL included, weekly on the axis) gets a daily answer with no range
+  logic here.
 - A composition is ~20 Ghostfolio requests (sign-in, accounts, a chart and
   holdings for the portfolio and each account, one price history per
   holding plus VOO), hence its own `offset: 5` minute in the hourly slot.
