@@ -12,9 +12,11 @@
  *   return over a range = the range's gain
  *                         ÷ (the value it started from + money put in since)
  *
- * — what the money did, which a deposit cannot move — and the same
- * formula over one session is that day's time-weighted return, which the
- * page chains for its day cells and its drawdown. Beside them: each
+ * — what the money did, which a deposit cannot move. Over one session
+ * that is the day's time-weighted return, chained here into each
+ * account's `growth` (with the dust rule, which ratios cannot carry) for
+ * the page's session, day cells and drawdown, plus the falls the weekly
+ * axis would hide. Beside them: each
  * holding's share of its account and the average price paid per share
  * (from the ledger), what each symbol is and its public daily closes and
  * the benchmark's (from Ghostfolio), and each account's best days. No
@@ -24,7 +26,7 @@
 import type { GfCloses, GfProfile } from "./ghostfolio";
 import type { WfAccount, WfCash, WfDay, WfHolding, WfHoldings } from "./wealthfolio";
 
-export const SITE_VERSION = 6;
+export const SITE_VERSION = 7;
 
 /** What the page compares the portfolio with: an S&P 500 fund's closes
  *  (price return, so it slightly understates the index with dividends). */
@@ -113,8 +115,8 @@ export function dayReturn(before: WfDay, day: WfDay): number | null {
 
 /** The daily returns chained, by day, from the day before capital first
  *  went in (the base, 1). Empty when nothing was ever held. It dates the
- *  account's start and finds its best days; the page chains the same
- *  returns off the shipped series. */
+ *  account's start, finds its best days and its falls, and ships on the
+ *  axis as `growth`. */
 export function growthIndex(history: WfDay[]): Map<string, number> {
   const index = new Map<string, number>();
   let level = 0;
@@ -224,6 +226,64 @@ export function bestDays(index: Map<string, number>): SiteMove[] {
     }
   }
   return best;
+}
+
+/** The index's level on each axis day — the latest on or before it — so
+ *  the page reads the worker's own daily returns (dust days earning
+ *  nothing, `MIN_CAPITAL`) rather than re-deriving them from ratios that
+ *  no longer carry the amount the rule needs. Null before the start. */
+export function growthOn(days: string[], index: Map<string, number>): (number | null)[] {
+  const levels = [...index];
+  let at = 0;
+  let last: number | null = null;
+  return days.map((day) => {
+    while (at < levels.length && levels[at][0] <= day) last = levels[at++][1];
+    return last === null ? null : round6(last);
+  });
+}
+
+/** The deepest fall from a running peak, measured from `from` to the
+ *  latest session, with the days it ran between. */
+export interface SiteFall {
+  from: string;
+  /** ≤ 0; 0 when it never fell (`peak` and `trough` are then `from`). */
+  depth: number;
+  peak: string;
+  trough: string;
+}
+
+/**
+ * The deepest fall from each axis day older than the daily window, read
+ * off the daily index. Thinning keeps one day a week back there, and a
+ * week that rose and gave it all back before its last day would leave
+ * no trace on the axis: from such a start the page cannot measure the
+ * fall from the axis, so it reads it here (from a later start the axis
+ * is daily and it measures it itself). Weekends drop out as they do
+ * from the axis.
+ */
+export function fallsFrom(days: string[], index: Map<string, number>): SiteFall[] {
+  const last = days.at(-1);
+  if (!last) return [];
+  const cutoff = shift(last, -DAILY_DAYS);
+  const daily = [...index].filter(([day], i) => i === 0 || isWeekday(day));
+  const falls: SiteFall[] = [];
+  for (const from of days) {
+    if (from >= cutoff) break;
+    let at = -1;
+    while (at + 1 < daily.length && daily[at + 1][0] <= from) at++;
+    if (at < 0) continue;
+    let peak = at;
+    let fall = { depth: 0, peak: from, trough: from };
+    for (let i = at; i < daily.length; i++) {
+      if (daily[i][1] > daily[peak][1]) peak = i;
+      const depth = daily[i][1] / daily[peak][1] - 1;
+      if (depth < fall.depth) {
+        fall = { depth, peak: peak === at ? from : daily[peak][0], trough: daily[i][0] };
+      }
+    }
+    falls.push({ from, ...fall, depth: round6(fall.depth) });
+  }
+  return falls;
 }
 
 /** Six decimals: a ratio or a return, below anything the page prints. */
@@ -359,6 +419,12 @@ export interface SiteAccount {
   value: (number | null)[];
   /** Money put in to date, net, on the same scale and days. */
   invested: (number | null)[];
+  /** Its daily returns chained (`growthIndex`) on `days`, 1 at its
+   *  start, null before — what the page's session, drawdown and strip
+   *  read, so they keep the worker's rules. */
+  growth: (number | null)[];
+  /** The deepest fall from each day before the daily window (`fallsFrom`). */
+  falls: SiteFall[];
   /** Its best days on record (`bestDays`), newest first. */
   best: SiteMove[];
   /** Most weight first; cash is `cash`, not a holding. */
@@ -453,7 +519,12 @@ export function composeSite(
 
   const account = (history: WfDay[], index: Map<string, number>) => {
     const [start] = index.keys();
-    return { ...capital(days, history, start), best: bestDays(index) };
+    return {
+      ...capital(days, history, start),
+      growth: growthOn(days, index),
+      falls: fallsFrom(days, index),
+      best: bestDays(index),
+    };
   };
 
   const taken = new Set(["all"]);

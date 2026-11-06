@@ -7,7 +7,9 @@ import {
   composeSite,
   DAILY_DAYS,
   dayReturn,
+  fallsFrom,
   growthIndex,
+  growthOn,
   heldSymbols,
   marketSession,
   SITE_VERSION,
@@ -90,6 +92,61 @@ describe("growthIndex", () => {
 
   it("is empty for an account that never held anything", () => {
     expect(growthIndex([day("2026-01-01", 0, 0), day("2026-01-02", 0, 0)]).size).toBe(0);
+  });
+});
+
+describe("growthOn", () => {
+  it("keeps the dust rule the ratios cannot: a tiny balance doubling earns nothing", () => {
+    // 10,000 in, all but 1 taken out, then the 1 doubles and halves.
+    const history = [
+      day("2026-01-01", 0, 0),
+      day("2026-01-02", 10_000, 10_000),
+      day("2026-01-05", 1, 1),
+      day("2026-01-06", 2, 1),
+      day("2026-01-07", 1, 1),
+    ];
+    const days = history.map((d) => d.date);
+    expect(growthOn(days, growthIndex(history))).toEqual([1, 1, 1, 1, 1]);
+  });
+
+  it("carries the level over a day the index lacks and is null before the start", () => {
+    const index = new Map([
+      ["2026-01-02", 1],
+      ["2026-01-05", 1.2],
+    ]);
+    expect(growthOn(["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06"], index)).toEqual([
+      null,
+      1,
+      1.2,
+      1.2,
+    ]);
+  });
+});
+
+describe("fallsFrom", () => {
+  it("finds a fall inside a week the weekly axis keeps one day of", () => {
+    // Mon 1,000 → Wed 2,000 → Fri 1,000, a year and more back; the axis
+    // keeps only the Fridays, which read flat.
+    const index = new Map([
+      ["2024-01-05", 1],
+      ["2024-01-08", 1],
+      ["2024-01-10", 2],
+      ["2024-01-12", 1],
+      ["2026-01-02", 1],
+    ]);
+    const days = ["2024-01-05", "2024-01-12", "2026-01-02"];
+    expect(fallsFrom(days, index)).toEqual([
+      { from: "2024-01-05", depth: -0.5, peak: "2024-01-10", trough: "2024-01-12" },
+      { from: "2024-01-12", depth: 0, peak: "2024-01-12", trough: "2024-01-12" },
+    ]);
+  });
+
+  it("says nothing of a start inside the daily window, or before the account's", () => {
+    const index = new Map([
+      ["2026-01-02", 1],
+      ["2026-01-05", 0.9],
+    ]);
+    expect(fallsFrom(["2025-01-01", "2026-01-02", "2026-01-05"], index)).toEqual([]);
   });
 });
 
@@ -438,6 +495,8 @@ describe("composeSite", () => {
     expect(site.accounts[0]).toMatchObject({
       value: [0, 1, 1.1],
       invested: [0, 1, 1],
+      growth: [1, 1, 1.1],
+      falls: [],
       best: [{ date: "2026-01-05", change: 0.1 }],
       holdings: [
         { symbol: "MSFT", weight: 0.9, performance: 0.25, cost: 400, since: "2026-01-02" },
