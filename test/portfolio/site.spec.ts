@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { refresh } from "../../src/lib/snapshot";
 import { portfolioSite } from "../../src/services/portfolio";
 import { SITE_VERSION } from "../../src/services/portfolio/compose";
+import { HISTORY_START } from "../../src/services/portfolio/wealthfolio";
 import { call, captureErrors, imageResponse } from "../helpers";
 
 const valuation = (date: string, totalValue: number, netContribution: number) => ({
@@ -79,7 +80,7 @@ function tool(name: string, args: Record<string, unknown>): unknown {
         ],
       };
     case "get_valuation_history":
-      expect(args.startDate).toBe("1970-01-01");
+      expect(args.startDate).toBe(HISTORY_START);
       return { valuations: HISTORY };
     case "get_holdings":
       return account === "a2"

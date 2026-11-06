@@ -106,6 +106,63 @@ function narrowDays(body: unknown): WfDay[] {
   });
 }
 
+/** Where a history starts: before anything was ever held. */
+export const HISTORY_START = "1970-01-01";
+
+/** More pages than any real history needs (each is up to 400 days). */
+const MAX_HISTORY_PAGES = 50;
+
+const nextDay = (date: string) => {
+  const next = new Date(`${date}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+};
+
+/**
+ * The whole valuation history, page by page. `get_valuation_history`
+ * returns the *earliest* points of a range, at most 400 (Wealthfolio 3.12's
+ * `MAX_VALUATIONS_POINTS`), and says so with `truncated` and
+ * `originalCount` — so a history past 400 days asked for in one call
+ * would stop at day 400 and never move again. Each page starts the day
+ * after the last one read, until one comes back whole. The pages must
+ * join in order and add up to at least the count the first one reported
+ * (the last day may be revalued meanwhile, never fewer days); anything
+ * else fails the read rather than ship a line with a hole in it.
+ */
+export async function readHistory(
+  call: (args: Record<string, unknown>) => Promise<unknown>
+): Promise<WfDay[]> {
+  const days: WfDay[] = [];
+  let expected: number | null = null;
+  let startDate = HISTORY_START;
+  for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
+    const body = await call({ startDate });
+    const read = narrowDays(body);
+    const truncated = isRecord(body) && body.truncated === true;
+    if (expected === null) {
+      expected =
+        truncated && isRecord(body) && isNumber(body.originalCount) ? body.originalCount : 0;
+    }
+    for (const entry of read) {
+      const last = days.at(-1);
+      if (last && entry.date <= last.date) {
+        throw new Error(`Wealthfolio valuations out of order at ${entry.date}`);
+      }
+      days.push(entry);
+    }
+    if (!truncated) {
+      if (days.length < expected) {
+        throw new Error(`Wealthfolio valuations short: ${days.length} of ${expected}`);
+      }
+      return days;
+    }
+    const last = days.at(-1);
+    if (read.length === 0 || !last) throw new Error("Wealthfolio truncated an empty page");
+    startDate = nextDay(last.date);
+  }
+  throw new Error(`Wealthfolio valuations past ${MAX_HISTORY_PAGES} pages`);
+}
+
 function narrowHoldings(body: unknown): WfHoldings {
   const total = isRecord(body) ? body.totalValue : null;
   if (!isNumber(total)) throw new Error("Wealthfolio holdings have no total");
@@ -237,10 +294,8 @@ export async function connect(env: Env): Promise<Wealthfolio> {
   const scoped = (accountId?: string) => (accountId ? { accountId } : {});
   return {
     accounts: async () => narrowAccounts(await call("get_accounts", { displayMode: "compact" })),
-    days: async (accountId) =>
-      narrowDays(
-        await call("get_valuation_history", { startDate: "1970-01-01", ...scoped(accountId) })
-      ),
+    days: (accountId) =>
+      readHistory((range) => call("get_valuation_history", { ...range, ...scoped(accountId) })),
     holdings: async (accountId) =>
       narrowHoldings(await call("get_holdings", { viewMode: "table", ...scoped(accountId) })),
     cash: async () => narrowCash(await call("get_cash_balances")),
