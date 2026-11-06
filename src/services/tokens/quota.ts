@@ -42,6 +42,7 @@ import { isRecord } from "../../lib/narrow";
 import { refresh } from "../../lib/snapshot";
 import { QUOTA_PROVIDERS, type QuotaPlan } from "./quota-registry";
 import { tokensSite } from "./site";
+import { bump } from "./state";
 
 /**
  * The reported provider rides in the path: `POST /tokens/quota/codex`. It
@@ -89,12 +90,13 @@ export async function handleQuota(request: Request, env: Env): Promise<Response>
   // The view is recomposed before the collector hears "accepted", so the
   // card is live by then — quota is its own write event, exactly like a
   // submission.
-  await env.TOKENS_DB.prepare(
-    `INSERT INTO quota_plans (provider, body) VALUES (?1, ?2)
-     ON CONFLICT (provider) DO UPDATE SET body = excluded.body`
-  )
-    .bind(plan.provider, JSON.stringify(plan))
-    .run();
+  await env.TOKENS_DB.batch([
+    env.TOKENS_DB.prepare(
+      `INSERT INTO quota_plans (provider, body) VALUES (?1, ?2)
+       ON CONFLICT (provider) DO UPDATE SET body = excluded.body`
+    ).bind(plan.provider, JSON.stringify(plan)),
+    bump(env.TOKENS_DB),
+  ]);
   await refresh(env, tokensSite);
 
   return json({ success: true, provider: plan.provider, capturedAt: plan.capturedAt });

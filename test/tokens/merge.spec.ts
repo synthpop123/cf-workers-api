@@ -120,6 +120,25 @@ describe("extractCoverages", () => {
     ]);
     expect(coverages).toEqual([{ client: "cursor", start: "2026-07-01", end: "2026-07-10" }]);
   });
+
+  it("drops a window whose parser is older than the stored floor, or whose client was rejected", () => {
+    const full = { mode: "full" as const, start: "2026-07-01", end: "2026-07-10" };
+    const floors = new Map([
+      ["cursor", 3],
+      ["claude", 2],
+    ]);
+    const coverages = extractCoverages(
+      [
+        { client: "cursor", parserRevision: 2, coverage: full },
+        { client: "claude", parserRevision: 2, coverage: full },
+        { client: "zed", parserRevision: 5, coverage: full },
+        { client: "kilo", parserRevision: Number.NaN, coverage: full },
+      ],
+      floors,
+      new Set(["zed"])
+    );
+    expect(coverages.map((c) => c.client)).toEqual(["claude"]);
+  });
 });
 
 describe("mergeDay", () => {

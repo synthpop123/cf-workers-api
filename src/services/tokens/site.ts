@@ -47,6 +47,7 @@ import {
 } from "./metrics";
 import { canonicalModel, canonicalProvider } from "./models";
 import { QUOTA_PROVIDERS, type QuotaPlan } from "./quota-registry";
+import { readGeneration } from "./state";
 
 // The schema version rides in the response body (`schemaVersion`, which
 // the homepage validates and keys its cache by) and in the snapshot
@@ -432,4 +433,8 @@ export const tokensSite: Snapshot = {
   key: "tokens:site",
   version: SITE_VERSION,
   compose: composeSiteBody,
+  // Every tokens write bumps it (state.ts), so a body composed across a
+  // write — a refresh that read the rows a wipe then deleted — is never
+  // left as the published one.
+  generation: (env) => readGeneration(env.TOKENS_DB),
 };

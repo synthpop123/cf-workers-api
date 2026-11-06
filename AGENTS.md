@@ -242,6 +242,23 @@ production.
   every window the dashboard draws ends today, so all three composition
   statements are bounded by `u.date <= today`. Keep new ones bounded
   too, or the day panel will contradict its own active-time card.
+- **Every tokens write bumps one counter** (`tokens_state.generation`,
+  `services/tokens/state.ts`) in its own D1 batch: submissions, quota
+  reports and the wipe. D1 makes each batch atomic, not the work around
+  it, and the counter is what orders that work. A submission merges in
+  memory against rows read earlier, so its write batch opens with
+  `guard(read)` and rolls back whole when another write landed in
+  between, then re-merges (overlapping `tokens serve` and manual submits
+  of one device would otherwise defeat the regression guard). The
+  `/tokens/site` snapshot declares `generation`, so `refresh` never
+  leaves a body composed across a write as the published one — a refresh
+  that read rows a wipe then deleted cannot republish them. Any new
+  write path must bump it too.
+- Full-coverage manifest windows replace stored history only from a
+  parser at least as new as the device's stored revision for that client,
+  and never for a client the same submission had rejected
+  (`extractCoverages`, the official server's revision filter): coverage
+  deletes before the merge compares revisions.
 - There is exactly one public read endpoint, `/tokens/site`, and that is a
   decision rather than a gap. A filterable aggregation API (stats /
   timeseries / breakdown / graph / meta / devices / submissions) was
@@ -370,12 +387,17 @@ production.
   what composition reads. Per account `compose.ts` ships two series on the
   axis, its value (holdings and cash) and the money put in to date, both
   divided by the most ever put in (`capital`), so they are ratios and no
-  amount survives. The page's every return is one over the other: a
-  range's return is its gain over the value it started from plus the
-  money put in since (a deposit never reads as a gain), and over one
-  session that is the day's time-weighted return (`dayReturn`), which the
-  page chains for its strip and drawdown. Wealthfolio's own TWR/IRR are
-  not read. The tests pin that no amount reaches the body.
+  amount survives. A range's return is one over the other: its gain over
+  the value it started from plus the money put in since (a deposit never
+  reads as a gain). Over one session that is the day's time-weighted
+  return (`dayReturn`), which this Worker chains (`growthIndex`) and ships
+  on the axis as `growth`: the page's last session, strip and drawdown
+  read it, never re-derive it from the ratios — those cannot carry the
+  `MIN_CAPITAL` rule without the amount it is measured in, and must not.
+  The weekly part of the axis also hides a week's peak and trough, so
+  each axis day before the daily window ships its deepest fall to date at
+  daily resolution (`falls`). Wealthfolio's own TWR/IRR are not read. The
+  tests pin that no amount reaches the body.
 - Per position it also ships the **average price paid per share**
   (`cost`: cost basis over quantity, divided in `wealthfolio.ts`), the
   position's own return (Wealthfolio's `totalReturnPct`: gain, realised,

@@ -43,6 +43,13 @@ export interface Snapshot {
   readonly version: number;
   /** The full JSON body as of `today`. Rejects when the upstream does. */
   compose(env: Env, today: string): Promise<string>;
+  /**
+   * For a service that owns its writes: a counter every write bumps
+   * (tokens' `tokens_state`). With it, `refresh` fences its publish — see
+   * there. Without it, the last put wins, which is right for a poller
+   * whose only writer is the scheduler.
+   */
+  generation?(env: Env): Promise<number>;
 }
 
 export interface SnapshotMeta {
@@ -99,15 +106,42 @@ export async function store(
   return { text, meta };
 }
 
-/** Compose and store. Rejects when composition does. */
+/** Compositions a fenced refresh tries before giving up. */
+const FENCE_ATTEMPTS = 4;
+
+/**
+ * Compose and store. Rejects when composition does.
+ *
+ * KV has no transactions, so with nothing else two refreshes publish in
+ * whatever order their puts land: one that read the data before a write
+ * (a wipe, say) and puts after the write's own refresh republishes what
+ * the write replaced — deleted data included. A snapshot with a
+ * `generation` is fenced against that: a body composed while the counter
+ * moved is not put, and when it moves between a put and the check after
+ * it, the put may have landed over the newer body, so the view is
+ * composed and put again (unconditionally) from the data as it now is.
+ * Whichever refresh puts last has therefore checked, after its put, that
+ * no write landed since it read.
+ */
 export async function refresh(
   env: Env,
   snapshot: Snapshot,
   today = isoToday(),
   previous?: Stored | null
 ): Promise<Stored> {
-  const prior = previous === undefined ? await read(env, snapshot) : previous;
-  return store(env, snapshot, await snapshot.compose(env, today), today, prior);
+  let prior = previous === undefined ? await read(env, snapshot) : previous;
+  const generation = snapshot.generation?.bind(snapshot);
+  if (!generation) return store(env, snapshot, await snapshot.compose(env, today), today, prior);
+
+  for (let attempt = 0; attempt < FENCE_ATTEMPTS; attempt++) {
+    const fence = await generation(env);
+    const text = await snapshot.compose(env, today);
+    if ((await generation(env)) !== fence) continue;
+    const stored = await store(env, snapshot, text, today, prior);
+    if ((await generation(env)) === fence) return stored;
+    prior = null;
+  }
+  throw new Error(`${snapshot.key}: writes kept landing while it was composed`);
 }
 
 /**

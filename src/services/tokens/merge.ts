@@ -116,13 +116,31 @@ export interface CoverageWindow {
   end: string;
 }
 
-export function extractCoverages(entries: ManifestEntry[] | undefined): CoverageWindow[] {
+/**
+ * The manifest's full-coverage windows that may replace stored history.
+ * A window is authoritative only when the parser that produced it is at
+ * least as new as anything this device has stored for that client
+ * (`floors`), and only for a client whose rows this submission does not
+ * already have rejected: coverage deletes before the merge looks at
+ * revisions, so an older parser's window — or a client rejected wholesale —
+ * would otherwise empty the newer history it was refused permission to
+ * replace. This is the official server's revision filter on
+ * `authoritativeCoverages`, which the coverage-only pass (stored days the
+ * submission no longer mentions) depends on just as much.
+ */
+export function extractCoverages(
+  entries: ManifestEntry[] | undefined,
+  floors: ReadonlyMap<string, number> = new Map(),
+  rejectedClients: ReadonlySet<string> = new Set()
+): CoverageWindow[] {
   if (!entries) return [];
   const out: CoverageWindow[] = [];
   for (const e of entries) {
-    if (e?.coverage?.mode === "full") {
-      out.push({ client: e.client, start: e.coverage.start, end: e.coverage.end });
-    }
+    if (e?.coverage?.mode !== "full") continue;
+    const revision = e.parserRevision;
+    if (typeof revision !== "number" || !Number.isFinite(revision)) continue;
+    if (revision < (floors.get(e.client) ?? 1) || rejectedClients.has(e.client)) continue;
+    out.push({ client: e.client, start: e.coverage.start, end: e.coverage.end });
   }
   return out;
 }

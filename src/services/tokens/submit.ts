@@ -29,6 +29,7 @@ import {
 import { refresh } from "../../lib/snapshot";
 import { tokensSite } from "./site";
 import { ensureDailyBackup, wipeArchive } from "./backup";
+import { STATE_SQL, bump, bumpForWipe, guard, readState, type TokensState } from "./state";
 
 interface StoredUsageRow {
   date: string;
@@ -137,10 +138,13 @@ interface DeviceRecord {
   stored: DeviceState;
   storedActivity: Map<string, number>;
   mode: "create" | "merge";
+  /** The write counter as of these rows (state.ts). */
+  generation: number;
 }
 
 async function loadDevice(env: Env, deviceId: string): Promise<DeviceRecord> {
-  const [usageRes, activityRes] = await env.TOKENS_DB.batch([
+  // One batch, so one transaction: the counter names exactly these rows.
+  const [usageRes, activityRes, stateRes] = await env.TOKENS_DB.batch([
     env.TOKENS_DB.prepare(
       `SELECT date, client, model, provider, input, output, cache_read,
                 cache_write, reasoning, messages, cost, parser_revision
@@ -149,7 +153,10 @@ async function loadDevice(env: Env, deviceId: string): Promise<DeviceRecord> {
     env.TOKENS_DB.prepare(
       `SELECT date, active_time_ms FROM daily_activity WHERE device_id = ?`
     ).bind(deviceId),
+    env.TOKENS_DB.prepare(STATE_SQL),
   ]);
+  const state = stateRes.results[0] as unknown as TokensState | undefined;
+  if (!state) throw new Error("tokens_state is missing its row (migration 0006)");
   const storedRows = usageRes.results as unknown as StoredUsageRow[];
   const stored = buildStoredState(storedRows);
   const storedActivity = new Map<string, number>();
@@ -157,7 +164,12 @@ async function loadDevice(env: Env, deviceId: string): Promise<DeviceRecord> {
     storedActivity.set(m.date, m.active_time_ms);
   }
 
-  return { stored, storedActivity, mode: storedRows.length === 0 ? "create" : "merge" };
+  return {
+    stored,
+    storedActivity,
+    mode: storedRows.length === 0 ? "create" : "merge",
+    generation: state.generation,
+  };
 }
 
 /**
@@ -175,38 +187,52 @@ function mergeSubmission(
   const contributions = payload.contributions ?? [];
   const floors = deriveRevisionFloors(stored);
   const submittedClients = collectSubmittedClients(payload.summary?.clients, contributions);
-  const coverages = extractCoverages(payload.clientManifest?.clients);
+  const incomingDays = contributions.map((day) => ({
+    date: day.date,
+    incoming: aggregateIncomingDay(day.clients),
+  }));
 
+  // Rejection is decided over the whole submission before anything merges,
+  // so the coverage windows below can leave a rejected client's history
+  // alone on every day — including days earlier in the list than the one
+  // whose rows carried the old revision.
   const rejectedClients = new Set<string>();
+  for (const { incoming } of incomingDays) {
+    for (const [client, data] of incoming) {
+      const floor = floors.get(client) ?? 1;
+      if (data.revision < floor && !rejectedClients.has(client)) {
+        warnings.push(
+          `Rejected ${client}: parser revision ${data.revision} is older than stored revision ${floor}.`
+        );
+        rejectedClients.add(client);
+      }
+    }
+  }
+  const coverages = extractCoverages(payload.clientManifest?.clients, floors, rejectedClients);
+  for (const entry of payload.clientManifest?.clients ?? []) {
+    const floor = floors.get(entry?.client) ?? 1;
+    if (entry?.coverage && !rejectedClients.has(entry.client) && !(entry.parserRevision >= floor)) {
+      warnings.push(
+        `Ignored ${entry.client} coverage: parser revision ${entry.parserRevision} is older than stored revision ${floor}.`
+      );
+    }
+  }
+
   const changedDays = new Map<string, DayState>();
   const incomingDates = new Set<string>();
 
-  for (const day of contributions) {
-    incomingDates.add(day.date);
-    const incoming = aggregateIncomingDay(day.clients);
-
-    for (const [client, data] of incoming) {
-      const floor = floors.get(client) ?? 1;
-      if (data.revision < floor) {
-        if (!rejectedClients.has(client)) {
-          warnings.push(
-            `Rejected ${client}: parser revision ${data.revision} is older than stored revision ${floor}.`
-          );
-          rejectedClients.add(client);
-        }
-      }
-    }
-
+  for (const { date, incoming } of incomingDays) {
+    incomingDates.add(date);
     const { merged, warnings: dayWarnings } = mergeDay(
-      day.date,
-      stored.get(day.date),
+      date,
+      stored.get(date),
       incoming,
       submittedClients,
       rejectedClients,
       coverages
     );
     warnings.push(...dayWarnings);
-    if (!daysEqual(stored.get(day.date), merged)) changedDays.set(day.date, merged);
+    if (!daysEqual(stored.get(date), merged)) changedDays.set(date, merged);
   }
 
   // Stored days absent from this submission: authoritative coverage may
@@ -239,11 +265,13 @@ function mergeSubmission(
 function planStatements(
   env: Env,
   { payload, deviceId, deviceName, submissionId, receivedAt: now }: Submission,
-  { storedActivity, mode }: DeviceRecord,
+  { storedActivity, mode, generation }: DeviceRecord,
   changedDays: Map<string, DayState>
 ): D1PreparedStatement[] {
   const contributions = payload.contributions ?? [];
-  const statements: D1PreparedStatement[] = [];
+  // The guard first: if another write landed since `loadDevice`, nothing
+  // below runs, and the caller merges again from what is there now.
+  const statements: D1PreparedStatement[] = [guard(env.TOKENS_DB, generation), bump(env.TOKENS_DB)];
 
   // One JSON row per (client, model, provider) of every changed day,
   // column order matching INSERT_USAGE_SQL after the leading device_id.
@@ -402,6 +430,30 @@ async function accountMetrics(db: D1Database) {
   };
 }
 
+/** Merges per submission before giving up on a busy store (503). */
+const SUBMIT_ATTEMPTS = 3;
+
+/**
+ * Put the raw payload, then take it back if a wipe committed after this
+ * submission did: the put can land after the wipe listed the bucket, and
+ * the wipe is a promise that nothing submitted before it survives.
+ */
+async function archiveRaw(
+  env: Env,
+  { deviceId, submissionId, receivedAt }: Submission,
+  rawBody: string,
+  committed: number
+): Promise<void> {
+  const key = `raw/${deviceId}/latest.json`;
+  await env.TOKENS_ARCHIVE.put(key, rawBody, {
+    httpMetadata: { contentType: "application/json" },
+    customMetadata: { submissionId, receivedAt: String(receivedAt) },
+  });
+  if ((await readState(env.TOKENS_DB)).wiped > committed) {
+    await env.TOKENS_ARCHIVE.delete(key);
+  }
+}
+
 export async function handleSubmit(
   request: Request,
   env: Env,
@@ -439,22 +491,35 @@ export async function handleSubmit(
     receivedAt: Date.now(),
   };
 
-  const device = await loadDevice(env, deviceId);
-  const changedDays = mergeSubmission(payload, device.stored, warnings);
-  await env.TOKENS_DB.batch(planStatements(env, submission, device, changedDays));
+  // Read, merge, write — with the write fenced by the counter (state.ts).
+  // Two overlapping submissions from one device (`tokens serve` and a
+  // manual submit) would otherwise both merge against the same stored
+  // rows, and the later write would undo the regression guard's verdict
+  // on the earlier one. A batch whose guard fails rolls back whole; the
+  // merge is then redone against the rows that beat it.
+  let accepted: { device: DeviceRecord; warnings: string[] } | undefined;
+  for (let attempt = 0; attempt < SUBMIT_ATTEMPTS && !accepted; attempt++) {
+    const attemptWarnings = [...warnings];
+    const device = await loadDevice(env, deviceId);
+    const changedDays = mergeSubmission(payload, device.stored, attemptWarnings);
+    try {
+      await env.TOKENS_DB.batch(planStatements(env, submission, device, changedDays));
+      accepted = { device, warnings: attemptWarnings };
+    } catch (error) {
+      // Only a moved counter is a lost race; anything else is a failure.
+      if ((await readState(env.TOKENS_DB)).generation === device.generation) throw error;
+    }
+  }
+  if (!accepted) {
+    return json({ error: "Other writes kept landing during this submission; retry it" }, 503);
+  }
+  const { device } = accepted;
+  const committed = device.generation + 1;
 
   // Archive the accepted payload verbatim. Submissions are full rescans,
   // so the latest one per device reproduces its whole history — enough to
   // replay-rebuild after a schema change (daily R2 exports cover the rest).
-  ctx.waitUntil(
-    env.TOKENS_ARCHIVE.put(`raw/${deviceId}/latest.json`, rawBody, {
-      httpMetadata: { contentType: "application/json" },
-      customMetadata: {
-        submissionId: submission.submissionId,
-        receivedAt: String(submission.receivedAt),
-      },
-    })
-  );
+  ctx.waitUntil(archiveRaw(env, submission, rawBody, committed));
 
   // Submissions are the only event that changes the data, so they drive
   // the KV site payload and the daily R2 export directly — devices report
@@ -468,7 +533,7 @@ export async function handleSubmit(
     username: env.TOKENS_USERNAME,
     metrics: await accountMetrics(env.TOKENS_DB),
     mode: device.mode,
-    warnings: warnings.length > 0 ? warnings.slice(0, 50) : undefined,
+    warnings: accepted.warnings.length > 0 ? accepted.warnings.slice(0, 50) : undefined,
   });
 }
 
@@ -504,6 +569,9 @@ export async function handleDeleteSubmittedData(request: Request, env: Env): Pro
     env.TOKENS_DB.prepare(`DELETE FROM devices`),
     env.TOKENS_DB.prepare(`DELETE FROM submissions`),
     env.TOKENS_DB.prepare(`DELETE FROM quota_plans`),
+    // Fails every submission still between its read and its write, and
+    // fences every composition still in flight (state.ts).
+    bumpForWipe(env.TOKENS_DB),
   ]);
   await wipeArchive(env);
   await refresh(env, tokensSite);
