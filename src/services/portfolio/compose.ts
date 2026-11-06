@@ -155,16 +155,47 @@ const shift = (day: string, delta: number) => {
  * holds still on them, and a flat step every week is noise) except the
  * base, then thinned to the last day of each week before the daily
  * window.
+ *
+ * Thinning keeps every day money moved in any of `ledgers` (the day its
+ * `invested` differs from the axis day before) and the axis day before
+ * it. The page reads the money in and out off adjacent axis days, so
+ * between two kept days there is at most one movement, on the later one,
+ * opening a one-day step: what was put in since a range's start, each
+ * day's return and the benchmark bought with the same money all come
+ * out as they do from the daily days. A week's withdrawal and deposit
+ * folded into one step would net out — and read as gain or loss.
  */
-export function axis(indexed: string[]): string[] {
+export function axis(indexed: string[], ledgers: WfDay[][] = []): string[] {
   const days = indexed.filter((day, i) => i === 0 || isWeekday(day));
   const last = days.at(-1);
   if (!last) return [];
   const cutoff = shift(last, -DAILY_DAYS);
+  const kept = new Set<number>();
+  for (const history of ledgers) {
+    const invested = investedOn(days, history);
+    for (let i = 1; i < days.length; i++) {
+      if (invested[i] !== invested[i - 1]) kept.add(i).add(i - 1);
+    }
+  }
   return days.filter(
     (day, i) =>
-      i === 0 || day >= cutoff || i === days.length - 1 || weekOf(day) !== weekOf(days[i + 1])
+      i === 0 ||
+      day >= cutoff ||
+      i === days.length - 1 ||
+      kept.has(i) ||
+      weekOf(day) !== weekOf(days[i + 1])
   );
+}
+
+/** The money in on each day: the latest entry on or before it, null
+ *  before the history starts. */
+function investedOn(days: string[], history: WfDay[]): (number | null)[] {
+  let at = 0;
+  let last: number | null = null;
+  return days.map((day) => {
+    while (at < history.length && history[at].date <= day) last = history[at++].invested;
+    return last;
+  });
 }
 
 /** One market day's return. */
@@ -358,7 +389,7 @@ export interface Site {
   schemaVersion: number;
   today: string;
   /** Market days, oldest first: daily for the last DAILY_DAYS, weekly
-   *  before. The last one is the session the latest quotes belong to —
+   *  before (plus every day money moved and the day before it). The last one is the session the latest quotes belong to —
    *  a New York date, which can be a day behind `today`. */
   days: string[];
   benchmark: { symbol: string; label: string; closes: (number | null)[] };
@@ -415,8 +446,9 @@ export function composeSite(
   session: string
 ): Site {
   const portfolio = toSessions(upstream.portfolio.days, session);
+  const histories = upstream.accounts.map((ledger) => toSessions(ledger.days, session));
   const whole = growthIndex(portfolio);
-  const days = axis([...whole.keys()]);
+  const days = axis([...whole.keys()], [portfolio, ...histories]);
   if (days.length < 2) throw new Error("Wealthfolio portfolio has no history yet");
 
   const account = (history: WfDay[], index: Map<string, number>) => {
@@ -434,8 +466,8 @@ export function composeSite(
       ...weigh(upstream.portfolio.holdings, upstream.portfolio.cash),
     },
   ];
-  for (const ledger of upstream.accounts) {
-    const history = toSessions(ledger.days, session);
+  for (const [i, ledger] of upstream.accounts.entries()) {
+    const history = histories[i];
     const index = growthIndex(history);
     const weighed = weigh(ledger.holdings, ledger.cash);
     if (index.size === 0 || (weighed.holdings.length === 0 && weighed.cash.length === 0)) continue;

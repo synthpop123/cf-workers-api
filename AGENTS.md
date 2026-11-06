@@ -351,7 +351,11 @@ production.
   token minted in Settings → AI agent access with **read scopes only**
   (`WEALTHFOLIO_TOKEN`). The tools it calls: `get_accounts`,
   `get_cash_balances`, `get_valuation_history` and `get_holdings` (whole
-  portfolio and each account).
+  portfolio and each account). `get_valuation_history` answers only a
+  range's earliest 400 points (`MAX_VALUATIONS_POINTS`, flagged
+  `truncated`), so `readHistory` pages it from the day after the last
+  one read and fails on a gap or overlap rather than ship a line that
+  stops at day 400.
 - Ghostfolio is read by a bot user (`GHOSTFOLIO_TOKEN` → `POST
   /api/v1/auth/anonymous` → JWT) through a PRIVATE read-only access the
   owner granted it (`Impersonation-Id: GHOSTFOLIO_ACCESS_ID`; it expires,
@@ -402,7 +406,11 @@ production.
   York open that day is the previous session again. `toSessions` folds
   every day from `marketSession(now)` on into that session; holiday
   calendars are not modelled. Weekends drop off the axis; days older than
-  `DAILY_DAYS` thin to one a week.
+  `DAILY_DAYS` thin to one a week, except that every day money moved in
+  any account stays, with the axis day before it. The page reads deposits
+  and withdrawals off adjacent axis days, so a week's money out and back
+  in folded into one step would net out and read as gain or loss; kept
+  apart, every return the page measures there is the daily one.
 - Each account also ships its **best days** (`best`, `bestDays`): newest
   first, every session whose return beat all the ones after it, read off
   the daily returns before the axis thins them. The page's Best day for a

@@ -192,6 +192,108 @@ describe("axis", () => {
   });
 });
 
+describe("axis around money moving", () => {
+  // Weekdays only, so a weekend never nets two movements on its own.
+  const weekdays: string[] = [];
+  for (let d = new Date("2024-01-01T12:00:00Z"); weekdays.length < 600; ) {
+    if (d.getUTCDay() % 6 !== 0) weekdays.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  // Tuesday to Thursday of one week far before the daily window.
+  const [out, back] = ["2024-03-12", "2024-03-14"];
+
+  /** 10,000 in on the first day; 5,000 out on `out` and in again on
+   *  `back`; the market swinging every day in between. */
+  const ledger = weekdays.map((date, i) => {
+    const invested = date >= out && date < back ? 5_000 : 10_000;
+    const market = 1 + 0.2 * Math.sin(i / 3) + i / 2_000;
+    return day(date, invested * market, i === 0 ? 0 : invested);
+  });
+  const prices = weekdays.map((date, i) => ({ date, close: 400 + 50 * Math.cos(i / 4) + i / 10 }));
+
+  /** The page's formulas (homepage src/lib/client/portfolio.ts),
+   *  over any series of the two. */
+  function moneyReturn(
+    value: number[],
+    invested: number[],
+    start: number,
+    closes?: number[]
+  ): number {
+    const [v0, n0] = [value[start], invested[start]];
+    let units = closes ? v0 / closes[start] : 0;
+    let added = 0;
+    const end = value.length - 1;
+    for (let i = start + 1; i <= end; i++) {
+      const flow = invested[i] - invested[i - 1];
+      added += Math.max(0, flow);
+      if (closes) units += flow / closes[i];
+    }
+    const now = closes ? units * closes[end] : value[end];
+    return (now - v0 - (invested[end] - n0)) / (v0 + added);
+  }
+  function chained(value: number[], invested: number[], start: number): number {
+    let level = 1;
+    for (let i = start + 1; i < value.length; i++) {
+      const flow = invested[i] - invested[i - 1];
+      level *= (value[i] + Math.max(0, -flow)) / (value[i - 1] + Math.max(0, flow));
+    }
+    return level - 1;
+  }
+
+  it("keeps the day money moved and the day before, even in the weekly stretch", () => {
+    const shown = axis(weekdays, [ledger]);
+    expect(shown).toEqual(expect.arrayContaining(["2024-03-11", out, "2024-03-13", back]));
+    expect(axis(weekdays)).not.toContain(out);
+  });
+
+  it("measures a range across the week as the daily days do", () => {
+    const site = composeSite(
+      {
+        portfolio: { days: ledger, holdings: { holdings: [], total: 0 }, cash: [] },
+        accounts: [],
+        profiles: new Map(),
+        closes: new Map(),
+        benchmark: { marketPrice: prices.at(-1)?.close ?? 0, closes: prices },
+      },
+      { symbols: new Map(), accounts: new Map() },
+      weekdays.at(-1) as string,
+      weekdays.at(-1) as string
+    );
+    const [all] = site.accounts;
+    const value = all.value as number[];
+    const invested = all.invested as number[];
+    const closes = site.benchmark.closes as number[];
+    const daily = {
+      value: ledger.map((entry) => entry.value),
+      invested: ledger.map((entry) => entry.invested),
+      closes: prices.map((price) => price.close),
+    };
+    // From the base, and from a Friday before the week, to the latest.
+    for (const from of [weekdays[0], "2024-03-08"]) {
+      const s = site.days.indexOf(from);
+      const d = weekdays.indexOf(from);
+      expect(moneyReturn(value, invested, s)).toBeCloseTo(
+        moneyReturn(daily.value, daily.invested, d),
+        5
+      );
+      expect(moneyReturn(value, invested, s, closes)).toBeCloseTo(
+        moneyReturn(daily.value, daily.invested, d, daily.closes),
+        5
+      );
+      expect(chained(value, invested, s)).toBeCloseTo(chained(daily.value, daily.invested, d), 5);
+    }
+    // Thinned without the week's two days, the same range reads otherwise.
+    const weekly = axis(weekdays).map((date) => weekdays.indexOf(date));
+    const pick = (series: number[]) => weekly.map((i) => series[i]);
+    expect(
+      Math.abs(
+        moneyReturn(pick(daily.value), pick(daily.invested), 0) -
+          moneyReturn(daily.value, daily.invested, 0)
+      )
+    ).toBeGreaterThan(0.01);
+  });
+});
+
 describe("alignCloses", () => {
   it("carries the last close over a holiday and prices today at the live quote", () => {
     const series = {
