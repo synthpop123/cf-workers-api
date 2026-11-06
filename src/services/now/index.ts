@@ -42,9 +42,9 @@ export interface TokensToday {
   /** Token totals of the last TOKENS_DAYS days, oldest first, the last
    *  one today's (`tokens`); a day with nothing reported is 0. */
   recent: number[];
-  /** The model with the most tokens over the tokens view's week (its
-   *  last seven days, today included) and its share of them, 0–1; null
-   *  when the week has none. The page names the id. */
+  /** The model with the most tokens over the seven days ending today
+   *  and its share of them, in (0, 1]; null when the week has none. The
+   *  page names the id. */
   top: { model: string; share: number } | null;
 }
 
@@ -71,28 +71,53 @@ export interface Site {
 }
 
 interface TokensSite {
-  daily: { date: string; tokens: number; cost: number; messages: number }[];
-  ranges?: {
-    week?: { totals: { tokens: number }; byModel: { model: string; tokens: number }[] };
-  };
+  daily: {
+    date: string;
+    tokens: number;
+    cost: number;
+    messages: number;
+    clients?: Record<string, { models?: Record<string, { tokens: number }> }>;
+  }[];
 }
 
 /** Ids the tokens view uses for usage it could not attribute; never the
  *  answer to "which model". */
 const PLACEHOLDER_MODELS = new Set(["unknown", "<synthetic>"]);
 
-/** The week's busiest model, its share rounded to three places. */
-export function topModel(site: TokensSite): TokensToday["top"] {
-  const week = site.ranges?.week;
-  const total = week?.totals.tokens ?? 0;
-  let best: { model: string; tokens: number } | null = null;
-  for (const row of week?.byModel ?? []) {
-    if (PLACEHOLDER_MODELS.has(row.model) || row.tokens <= 0) continue;
-    if (!best || row.tokens > best.tokens) best = row;
+/** Days in the week the busiest model is measured over, today last. */
+const WEEK_DAYS = 7;
+
+/**
+ * The busiest model of the seven days ending `today` — this service's
+ * today, not the tokens view's: that view is stored as of the day it was
+ * last composed, and when the collectors have gone quiet its own week can
+ * be days behind the bars beside it. So the week is summed afresh from
+ * the daily series' model cells (canonical ids, the same as the view's
+ * `byModel`), over all of the week's tokens, placeholders included.
+ *
+ * The share is not rounded: the busiest model's tokens are positive, and
+ * a share rounded to zero (one token against a million unattributed) is
+ * a value the page's decoder rightly refuses.
+ */
+export function topModel(site: TokensSite, today: string): TokensToday["top"] {
+  const from = shiftDays(today, 1 - WEEK_DAYS);
+  const byModel = new Map<string, number>();
+  let total = 0;
+  for (const day of site.daily) {
+    if (day.date < from || day.date > today) continue;
+    total += day.tokens;
+    for (const client of Object.values(day.clients ?? {})) {
+      for (const [model, cell] of Object.entries(client.models ?? {})) {
+        byModel.set(model, (byModel.get(model) ?? 0) + cell.tokens);
+      }
+    }
   }
-  return best && total > 0
-    ? { model: best.model, share: Math.round((best.tokens / total) * 1000) / 1000 }
-    : null;
+  let best: { model: string; tokens: number } | null = null;
+  for (const [model, tokens] of byModel) {
+    if (PLACEHOLDER_MODELS.has(model) || tokens <= 0) continue;
+    if (!best || tokens > best.tokens) best = { model, tokens };
+  }
+  return best && total > 0 ? { model: best.model, share: Math.min(1, best.tokens / total) } : null;
 }
 
 /** What is stored, of any day: composing a source from here would put
@@ -129,7 +154,7 @@ export function pickTokens(site: TokensSite | null, today: string): TokensToday 
     (_, i) => byDate.get(shiftDays(today, i + 1 - TOKENS_DAYS))?.tokens ?? 0
   );
   const day = byDate.get(today);
-  const top = topModel(site);
+  const top = topModel(site, today);
   return day
     ? { tokens: day.tokens, cost: day.cost, messages: day.messages, recent, top }
     : { tokens: 0, cost: 0, messages: 0, recent, top };

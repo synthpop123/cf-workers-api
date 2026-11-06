@@ -80,14 +80,16 @@ const seed = async (today: string) => {
       schemaVersion: tokensSite.version,
       daily: [
         { date: "2026-01-01", tokens: 5, cost: 1, messages: 1 },
-        { date: today, tokens: 39_700_000, cost: 14.48, messages: 155, clients: {} },
-      ],
-      ranges: {
-        week: {
-          totals: { tokens: 40_000_000 },
-          byModel: [{ model: "claude-opus-5-5", tokens: 38_000_000 }],
+        {
+          date: today,
+          tokens: 40_000_000,
+          cost: 14.48,
+          messages: 155,
+          clients: {
+            claude: { tokens: 40_000_000, models: { "claude-opus-5-5": { tokens: 38_000_000 } } },
+          },
         },
-      },
+      ],
     })
   );
   await store(
@@ -145,27 +147,48 @@ describe("pickTokens", () => {
 });
 
 describe("topModel", () => {
-  const site = (byModel: { model: string; tokens: number }[], total: number) => ({
-    daily: [],
-    ranges: { week: { totals: { tokens: total }, byModel } },
+  type Cells = Record<string, number>;
+  const day = (date: string, tokens: number, ...clients: Cells[]) => ({
+    date,
+    tokens,
+    cost: 0,
+    messages: 0,
+    clients: Object.fromEntries(
+      clients.map((models, i) => [
+        `client${i}`,
+        { models: Object.fromEntries(Object.entries(models).map(([m, t]) => [m, { tokens: t }])) },
+      ])
+    ),
   });
 
   it("names the week's busiest model and its share of every token", () => {
-    const week = site(
-      [
-        { model: "deepseek-v4.1-flash", tokens: 10 },
-        { model: "claude-opus-5-5", tokens: 981 },
-        { model: "unknown", tokens: 5000 },
+    const site = {
+      daily: [
+        day("2026-09-21", 600, { "claude-opus-5-5": 500, "deepseek-v4.1-flash": 10 }),
+        day("2026-09-27", 4400, { "claude-opus-5-5": 481 }, { unknown: 3900 }),
       ],
-      1000
-    );
-    expect(topModel(week)).toEqual({ model: "claude-opus-5-5", share: 0.981 });
+    };
+    expect(topModel(site, "2026-09-27")).toEqual({ model: "claude-opus-5-5", share: 981 / 5000 });
   });
 
-  it("is null for a quiet week or a view without one", () => {
-    expect(topModel(site([], 0))).toBeNull();
-    expect(topModel(site([{ model: "<synthetic>", tokens: 9 }], 9))).toBeNull();
-    expect(topModel({ daily: [] })).toBeNull();
+  it("measures the seven days ending on its own today, not the stored view's week", () => {
+    const site = { daily: [day("2026-10-25", 900, { "gpt-5.5": 900 })] };
+    expect(topModel(site, "2026-10-31")).toEqual({ model: "gpt-5.5", share: 1 });
+    expect(topModel(site, "2026-11-06")).toBeNull();
+  });
+
+  it("keeps a tiny share above zero instead of rounding it away", () => {
+    const site = { daily: [day("2026-09-27", 1_000_000, { "gpt-5.5": 1, unknown: 999_999 })] };
+    const top = topModel(site, "2026-09-27");
+    expect(top?.model).toBe("gpt-5.5");
+    expect(top?.share).toBeGreaterThan(0);
+  });
+
+  it("is null for a quiet week or one with only placeholders", () => {
+    expect(topModel({ daily: [] }, "2026-09-27")).toBeNull();
+    expect(
+      topModel({ daily: [day("2026-09-27", 9, { "<synthetic>": 9 })] }, "2026-09-27")
+    ).toBeNull();
   });
 });
 
@@ -231,10 +254,10 @@ describe("GET /now/site", () => {
       listen: LISTEN,
       film: FILM,
       tokens: {
-        tokens: 39_700_000,
+        tokens: 40_000_000,
         cost: 14.48,
         messages: 155,
-        recent: [...zeros(TOKENS_DAYS - 1), 39_700_000],
+        recent: [...zeros(TOKENS_DAYS - 1), 40_000_000],
         top: { model: "claude-opus-5-5", share: 0.95 },
       },
       portfolio: PORTFOLIO_TILE,
