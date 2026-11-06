@@ -1,39 +1,33 @@
 /**
- * The pure layer: Ghostfolio's slices in, the public /portfolio/site body
- * out. No bindings, no clock — `today` is always passed in — so this is
- * where the unit tests live.
+ * The pure layer: the ledger's and the prices' slices in, the public
+ * /portfolio/site body out. No bindings, no clock — `today` is always
+ * passed in — so this is where the unit tests live.
  *
- * What ships is how the portfolio moved, never what it is worth: a growth
- * index per account (the time-weighted return, 1 at the account's first
- * day), each holding's share of its account, and the public daily closes
- * of the holdings and of the benchmark, each account's best days, and per
- * position the average
- * price paid per share and the day it was first bought. No amount,
- * quantity or individual trade is in it, and none can be derived from
- * it: an index is blind to money moving in and out by construction, and
- * a per-share price without a share count is not a sum.
+ * What ships is how the portfolio did, never what it is worth. Per
+ * account, two series on the axis: its value (holdings and cash) and the
+ * money put into it to date, both divided by the most ever put in, so
+ * they are ratios on one scale and no amount survives. Every return the
+ * page prints is one of them divided by the other:
  *
- * The index chains daily returns. A day's return is the day's gain over
- * the capital at work that day — the previous close plus whatever was put
- * in that day:
+ *   return over a range = the range's gain
+ *                         ÷ (the value it started from + money put in since)
  *
- *   r(t) = (gain(t) − gain(t−1)) / (value(t−1) + max(0, invested(t)))
- *
- * Ghostfolio's gain already nets fees and counts realised gains and
- * dividends, so a sale or a payout moves the index by what it earned and
- * a deposit moves it not at all. Unlike Ghostfolio's own percentages, the
- * result is cut to any range by dividing two of its values, and compares
- * with an index fund's price line directly.
+ * — what the money did, which a deposit cannot move — and the same
+ * formula over one session is that day's time-weighted return, which the
+ * page chains for its day cells and its drawdown. Beside them: each
+ * holding's share of its account, the average price paid per share, the
+ * public daily closes of the holdings and of the benchmark, and each
+ * account's best days. No quantity, trade or amount is in it.
  */
 
-import { DATE_RE } from "../../lib/http";
-import type { GfAccount, GfCloses, GfDay, GfHolding } from "./ghostfolio";
+import type { GfCloses } from "./ghostfolio";
+import type { WfAccount, WfCash, WfDay, WfHolding, WfHoldings, WfProfile } from "./wealthfolio";
 
-export const SITE_VERSION = 4;
+export const SITE_VERSION = 5;
 
 /** What the page compares the portfolio with: an S&P 500 fund's closes
  *  (price return, so it slightly understates the index with dividends). */
-export const BENCHMARK = { dataSource: "YAHOO", symbol: "VOO", label: "S&P 500" } as const;
+export const BENCHMARK = { symbol: "VOO", label: "S&P 500" } as const;
 
 /** Days kept at daily resolution, counted back from the last one; older
  *  days thin to one a week, which is all a multi-year line can draw. */
@@ -42,9 +36,17 @@ export const DAILY_DAYS = 366;
 /** Capital below this (in the base currency) earns no return: a day that
  *  starts from dust would turn a cent of rounding, or a one-dollar
  *  position going to zero, into the account's whole history. An account
- *  that only ever held dust before (Schwab's first months) starts its
- *  index the day real money went in. */
+ *  that only ever held dust before starts the day real money went in. */
 export const MIN_CAPITAL = 100;
+
+/** How each account shows on the page — a short name, and the broker's
+ *  site for its logo — keyed by its name in Wealthfolio. An account not
+ *  here keeps its own name and goes without a logo. */
+export const BROKERS: Readonly<Record<string, { name: string; domain: string }>> = {
+  "Interactive Brokers": { name: "IBKR", domain: "interactivebrokers.com" },
+  "Charles Schwab": { name: "Schwab", domain: "schwab.com" },
+  HSBC: { name: "HSBC", domain: "hsbc.com.hk" },
+};
 
 /** Where the holdings trade, and when its regular session opens there. */
 const MARKET_TIME_ZONE = "America/New_York";
@@ -77,130 +79,48 @@ export function marketSession(at: Date): string {
 }
 
 /**
- * Ghostfolio buckets its chart by the server's calendar (Asia/Shanghai)
- * and values its last day at the live quote. A US session closes in the
- * Shanghai night, so from midnight until the next open that last day is
- * the previous session again under a later date: a flat step at the end
- * of every line, and a day's move printed as 0.00% all day. So every day
- * from `session` on is folded into one day dated `session`: the latest
- * value and gain, with the money put in across them.
+ * Wealthfolio dates its valuations by the server's calendar
+ * (Asia/Shanghai) and values the last one at the latest quote. A US
+ * session closes in the Shanghai night, so from midnight until the next
+ * open that last day is the previous session again under a later date: a
+ * flat step at the end of every line. So every day from `session` on is
+ * folded into one day dated `session`, carrying the latest value and
+ * contribution.
  */
-export function toSessions(chart: GfDay[], session: string): GfDay[] {
-  const at = chart.findIndex((day) => day.date >= session);
-  if (at === -1 || chart.at(-1)?.date === session) return chart;
-  const tail = chart.slice(at);
-  const last = tail[tail.length - 1];
-  return [
-    ...chart.slice(0, at),
-    {
-      date: session,
-      value: last.value,
-      netPerformance: last.netPerformance,
-      investment: tail.reduce((sum, day) => sum + day.investment, 0),
-    },
-  ];
+export function toSessions(history: WfDay[], session: string): WfDay[] {
+  const at = history.findIndex((day) => day.date >= session);
+  const last = history.at(-1);
+  if (at === -1 || !last || last.date === session) return history;
+  return [...history.slice(0, at), { ...last, date: session }];
 }
 
-export interface SiteHolding {
-  symbol: string;
-  /** Share of the account, cash included, 0–1. */
-  weight: number;
-  /** The position's return over its life in this account — a ratio of
-   *  gain to money put in, so it says nothing of either. */
-  performance: number | null;
-  /** Average price paid per share in this account, in the symbol's
-   *  currency; null when Ghostfolio cannot say. */
-  cost: number | null;
-  /** The first buy in this account, a calendar day. */
-  since: string | null;
+/**
+ * One day's return on the money at work: the gain over the previous
+ * close plus whatever was put in that day (money taken out is added back
+ * to the close). Null on dust (`MIN_CAPITAL`).
+ */
+export function dayReturn(before: WfDay, day: WfDay): number | null {
+  const flow = day.invested - before.invested;
+  const base = before.value + Math.max(0, flow);
+  return base < MIN_CAPITAL ? null : (day.value + Math.max(0, -flow)) / base - 1;
 }
 
-/** Cash in one currency, and its share of the account. */
-export interface SiteCash {
-  currency: string;
-  weight: number;
-}
-
-export interface SiteAccount {
-  /** `all` for the whole portfolio, otherwise a slug of the name. */
-  id: string;
-  name: string;
-  /** The broker's logo; null for the whole portfolio and for an account
-   *  with no platform (or none found). */
-  logo: string | null;
-  /** Growth index on `days`: 1 on the account's first day, null before. */
-  index: (number | null)[];
-  /** Its best days on record (`bestDays`), newest first. */
-  best: SiteMove[];
-  /** Most weight first; cash is `cash`, not a holding. */
-  holdings: SiteHolding[];
-  /** Most weight first. */
-  cash: SiteCash[];
-}
-
-/** One market day's move of a growth index. */
-export interface SiteMove {
-  date: string;
-  change: number;
-}
-
-export interface SiteSymbol {
-  symbol: string;
-  name: string;
-  /** ISO 4217, what `closes` are in. */
-  currency: string;
-  kind: "stock" | "etf" | "other";
-  logo: string | null;
-  /** A stock's sector (Ghostfolio's names); null for a fund. */
-  sector: string | null;
-  /** ISO 3166 alpha-2, where it is mostly listed or based. */
-  country: string | null;
-  /** The company's site, https only. */
-  url: string | null;
-  /** Close on each of `days`, carried over holidays; null before the
-   *  first close Ghostfolio has. */
-  closes: (number | null)[];
-}
-
-export interface Site {
-  schemaVersion: number;
-  today: string;
-  /** Market days, oldest first: daily for the last DAILY_DAYS, weekly
-   *  before. The last one is the session the latest quotes belong to —
-   *  a New York date, which can be a day behind `today`. */
-  days: string[];
-  benchmark: { symbol: string; label: string; closes: (number | null)[] };
-  /** The whole portfolio first, then each account holding something. */
-  accounts: SiteAccount[];
-  /** Every holding of the whole portfolio, in its weight order. */
-  symbols: SiteSymbol[];
-}
-
-export interface Upstream {
-  portfolio: { chart: GfDay[]; holdings: GfHolding[] };
-  accounts: { account: GfAccount; chart: GfDay[]; holdings: GfHolding[] }[];
-  /** Keyed by symbol. A symbol missing here ships with no closes. */
-  closes: Map<string, GfCloses>;
-  benchmark: GfCloses;
-}
-
-/** The growth index by day, from the day before capital first went in
- *  (the base, 1) to the chart's end. Empty when nothing was ever held. */
-export function growthIndex(chart: GfDay[]): Map<string, number> {
+/** The daily returns chained, by day, from the day before capital first
+ *  went in (the base, 1). Empty when nothing was ever held. It dates the
+ *  account's start and finds its best days; the page chains the same
+ *  returns off the shipped series. */
+export function growthIndex(history: WfDay[]): Map<string, number> {
   const index = new Map<string, number>();
   let level = 0;
-  for (let i = 1; i < chart.length; i++) {
-    const before = chart[i - 1];
-    const day = chart[i];
-    const capital = before.value + Math.max(0, day.investment);
+  for (let i = 1; i < history.length; i++) {
+    const change = dayReturn(history[i - 1], history[i]);
     if (level === 0) {
-      if (capital < MIN_CAPITAL) continue;
+      if (change === null) continue;
       level = 1;
-      index.set(before.date, 1);
+      index.set(history[i - 1].date, 1);
     }
-    const gain = day.netPerformance - before.netPerformance;
-    if (capital >= MIN_CAPITAL) level *= 1 + gain / capital;
-    index.set(day.date, level);
+    if (change !== null) level *= 1 + change;
+    index.set(history[i].date, level);
   }
   return index;
 }
@@ -241,6 +161,12 @@ export function axis(indexed: string[]): string[] {
   );
 }
 
+/** One market day's return. */
+export interface SiteMove {
+  date: string;
+  change: number;
+}
+
 /**
  * The best days on record, newest first: walking back from the latest
  * session, each day that beat every one after it. The best day after any
@@ -257,29 +183,43 @@ export function bestDays(index: Map<string, number>): SiteMove[] {
     const change = days[i][1] / days[i - 1][1] - 1;
     if (change > top) {
       top = change;
-      best.push({ date: days[i][0], change: roundIndex(change) });
+      best.push({ date: days[i][0], change: round6(change) });
     }
   }
   return best;
 }
 
-/** Six decimals: a growth index, below any return the page prints. */
-const roundIndex = (value: number) => Math.round(value * 1e6) / 1e6;
+/** Six decimals: a ratio or a return, below anything the page prints. */
+const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
 
 /** Six significant digits: any share price, to the cent and beyond. */
 const roundPrice = (value: number) => Number(value.toPrecision(6));
 
 const roundWeight = (value: number) => Math.round(value * 1e4) / 1e4;
 
-/** The index on each axis day, carried over a day the account's chart
- *  skips; null before it starts. */
-function alignIndex(days: string[], index: Map<string, number>): (number | null)[] {
-  let last: number | null = null;
-  return days.map((day) => {
-    const value = index.get(day);
-    if (value !== undefined) last = value;
-    return last === null ? null : roundIndex(last);
-  });
+/**
+ * An account's value and the money in it on each axis day, divided by the
+ * most it ever had in, from its start (the index's base) — null before.
+ * A day the account's history skips carries the one before.
+ */
+export function capital(
+  days: string[],
+  history: WfDay[],
+  start: string
+): { value: (number | null)[]; invested: (number | null)[] } {
+  const held = history.filter((day) => day.date >= start);
+  const scale = Math.max(...held.map((day) => day.invested));
+  if (!(scale > 0)) throw new Error("account has no money in it");
+  let at = 0;
+  let last: WfDay | null = null;
+  const value: (number | null)[] = [];
+  const invested: (number | null)[] = [];
+  for (const day of days) {
+    while (at < held.length && held[at].date <= day) last = held[at++];
+    value.push(last === null ? null : round6(last.value / scale));
+    invested.push(last === null ? null : round6(last.invested / scale));
+  }
+  return { value, invested };
 }
 
 /**
@@ -319,50 +259,134 @@ export function slug(name: string, taken: Set<string>): string {
   return id;
 }
 
-/** Holdings by weight, cash split off by currency. */
-function weigh(holdings: GfHolding[]): { holdings: SiteHolding[]; cash: SiteCash[] } {
-  const cash = new Map<string, number>();
-  const held: SiteHolding[] = [];
-  for (const holding of holdings) {
-    if (holding.cash) {
-      cash.set(holding.currency, (cash.get(holding.currency) ?? 0) + holding.weight);
-    } else if (holding.weight > 0) {
-      held.push({
+export interface SiteHolding {
+  symbol: string;
+  /** Share of the account, cash included, 0–1. */
+  weight: number;
+  /** The position's return over its life in this account — gain over
+   *  what went into it, so it says nothing of either. */
+  performance: number | null;
+  /** Average price paid per share in this account, in the symbol's
+   *  currency; null when the ledger has no cost for it. */
+  cost: number | null;
+  /** The first buy in this account, a calendar day. */
+  since: string | null;
+}
+
+/** Cash in one currency, and its share of the account. */
+export interface SiteCash {
+  currency: string;
+  weight: number;
+}
+
+/** Holdings and cash, each as a share of everything in the account. */
+export function weigh(
+  { holdings, total }: WfHoldings,
+  cash: WfCash[]
+): { holdings: SiteHolding[]; cash: SiteCash[] } {
+  const whole = total + cash.reduce((sum, entry) => sum + entry.value, 0);
+  const share = (value: number) => (whole > 0 ? roundWeight(value / whole) : 0);
+  const byCurrency = new Map<string, number>();
+  for (const entry of cash) {
+    byCurrency.set(entry.currency, (byCurrency.get(entry.currency) ?? 0) + entry.value);
+  }
+  return {
+    holdings: holdings
+      .map((holding) => ({
         symbol: holding.symbol,
-        weight: roundWeight(holding.weight),
-        performance: holding.performance === null ? null : roundIndex(holding.performance),
+        weight: share(holding.value),
+        performance: holding.performance === null ? null : round6(holding.performance),
         cost: holding.cost === null ? null : roundPrice(holding.cost),
         since: holding.since,
-      });
-    }
-  }
-  held.sort((a, b) => b.weight - a.weight || a.symbol.localeCompare(b.symbol));
-  return {
-    holdings: held,
-    cash: [...cash]
-      .map(([currency, weight]) => ({ currency, weight: roundWeight(weight) }))
+      }))
+      .filter((holding) => holding.weight > 0)
+      .sort((a, b) => b.weight - a.weight || a.symbol.localeCompare(b.symbol)),
+    cash: [...byCurrency]
+      .map(([currency, value]) => ({ currency, weight: share(value) }))
       .filter((entry) => entry.weight > 0)
       .sort((a, b) => b.weight - a.weight || a.currency.localeCompare(b.currency)),
   };
 }
 
-const kindOf = (subClass: string | null): SiteSymbol["kind"] =>
-  subClass === "STOCK" ? "stock" : subClass === "ETF" ? "etf" : "other";
-
-/** Every non-cash holding, in the portfolio's weight order, once. */
-export function heldSymbols(holdings: GfHolding[]): GfHolding[] {
-  const seen = new Map<string, GfHolding>();
-  for (const holding of holdings) {
-    if (!holding.cash && holding.weight > 0 && !seen.has(holding.symbol)) {
-      seen.set(holding.symbol, holding);
-    }
-  }
-  return [...seen.values()].sort((a, b) => b.weight - a.weight || a.symbol.localeCompare(b.symbol));
+export interface SiteAccount {
+  /** `all` for the whole portfolio, otherwise a slug of the name. */
+  id: string;
+  name: string;
+  /** The broker's logo; null for the whole portfolio and for an account
+   *  `BROKERS` does not know (or whose logo was not found). */
+  logo: string | null;
+  /** Value on `days` (holdings and cash) over the most ever put in; null
+   *  before the account's start. */
+  value: (number | null)[];
+  /** Money put in to date, net, on the same scale and days. */
+  invested: (number | null)[];
+  /** Its best days on record (`bestDays`), newest first. */
+  best: SiteMove[];
+  /** Most weight first; cash is `cash`, not a holding. */
+  holdings: SiteHolding[];
+  /** Most weight first. */
+  cash: SiteCash[];
 }
 
-/** How many days of closes to ask for: back to the portfolio's base. */
-export function historyDays(chart: GfDay[], today: string): number {
-  const first = chart.find((day) => DATE_RE.test(day.date))?.date ?? today;
+export interface SiteSymbol {
+  symbol: string;
+  name: string;
+  /** ISO 4217, what `closes` are in. */
+  currency: string;
+  kind: WfProfile["kind"];
+  logo: string | null;
+  /** A stock's GICS sector; null for a fund. */
+  sector: string | null;
+  /** ISO 3166 alpha-2, where it is mostly based. */
+  country: string | null;
+  /** Close on each of `days`, carried over holidays; null before the
+   *  first close there is. */
+  closes: (number | null)[];
+}
+
+export interface Site {
+  schemaVersion: number;
+  today: string;
+  /** Market days, oldest first: daily for the last DAILY_DAYS, weekly
+   *  before. The last one is the session the latest quotes belong to —
+   *  a New York date, which can be a day behind `today`. */
+  days: string[];
+  benchmark: { symbol: string; label: string; closes: (number | null)[] };
+  /** The whole portfolio first, then each account holding something. */
+  accounts: SiteAccount[];
+  /** Every holding of the whole portfolio, in its weight order. */
+  symbols: SiteSymbol[];
+}
+
+/** An account's slices of the ledger. */
+export interface Ledger {
+  days: WfDay[];
+  holdings: WfHoldings;
+  cash: WfCash[];
+}
+
+export interface Upstream {
+  portfolio: Ledger;
+  accounts: (Ledger & { account: WfAccount })[];
+  /** Keyed by symbol; a symbol missing here ships as `other`, unplaced. */
+  profiles: ReadonlyMap<string, WfProfile>;
+  /** Keyed by symbol. A symbol missing here ships with no closes. */
+  closes: ReadonlyMap<string, GfCloses>;
+  benchmark: GfCloses;
+}
+
+/** Every holding, heaviest first, once. */
+export function heldSymbols(holdings: WfHolding[]): WfHolding[] {
+  const seen = new Map<string, WfHolding>();
+  for (const holding of holdings) {
+    if (holding.value > 0 && !seen.has(holding.symbol)) seen.set(holding.symbol, holding);
+  }
+  return [...seen.values()].sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
+}
+
+/** How many days of closes to ask for: back to the portfolio's start. */
+export function historyDays(history: WfDay[], today: string): number {
+  const first = history[0]?.date ?? today;
   const span = Math.round((Date.parse(today) - Date.parse(first)) / 86_400_000);
   return Math.max(30, span + 7);
 }
@@ -379,9 +403,15 @@ export function composeSite(
   today: string,
   session: string
 ): Site {
-  const whole = growthIndex(toSessions(upstream.portfolio.chart, session));
+  const portfolio = toSessions(upstream.portfolio.days, session);
+  const whole = growthIndex(portfolio);
   const days = axis([...whole.keys()]);
-  if (days.length < 2) throw new Error("Ghostfolio portfolio has no history yet");
+  if (days.length < 2) throw new Error("Wealthfolio portfolio has no history yet");
+
+  const account = (history: WfDay[], index: Map<string, number>) => {
+    const [start] = index.keys();
+    return { ...capital(days, history, start), best: bestDays(index) };
+  };
 
   const taken = new Set(["all"]);
   const accounts: SiteAccount[] = [
@@ -389,21 +419,21 @@ export function composeSite(
       id: "all",
       name: "All accounts",
       logo: null,
-      index: alignIndex(days, whole),
-      best: bestDays(whole),
-      ...weigh(upstream.portfolio.holdings),
+      ...account(portfolio, whole),
+      ...weigh(upstream.portfolio.holdings, upstream.portfolio.cash),
     },
   ];
-  for (const { account, chart, holdings } of upstream.accounts) {
-    const weighed = weigh(holdings);
-    const index = growthIndex(toSessions(chart, session));
+  for (const ledger of upstream.accounts) {
+    const history = toSessions(ledger.days, session);
+    const index = growthIndex(history);
+    const weighed = weigh(ledger.holdings, ledger.cash);
     if (index.size === 0 || (weighed.holdings.length === 0 && weighed.cash.length === 0)) continue;
+    const name = BROKERS[ledger.account.name]?.name ?? ledger.account.name;
     accounts.push({
-      id: slug(account.name, taken),
-      name: account.name,
-      logo: logos.accounts.get(account.id) ?? null,
-      index: alignIndex(days, index),
-      best: bestDays(index),
+      id: slug(name, taken),
+      name,
+      logo: logos.accounts.get(ledger.account.id) ?? null,
+      ...account(history, index),
       ...weighed,
     });
   }
@@ -418,16 +448,18 @@ export function composeSite(
       closes: alignCloses(days, upstream.benchmark, session),
     },
     accounts,
-    symbols: heldSymbols(upstream.portfolio.holdings).map((holding) => ({
-      symbol: holding.symbol,
-      name: holding.name,
-      currency: holding.currency,
-      kind: kindOf(holding.subClass),
-      logo: logos.symbols.get(holding.symbol) ?? null,
-      sector: holding.sector,
-      country: holding.country,
-      url: holding.url,
-      closes: alignCloses(days, upstream.closes.get(holding.symbol), session),
-    })),
+    symbols: heldSymbols(upstream.portfolio.holdings.holdings).map((holding) => {
+      const profile = upstream.profiles.get(holding.symbol);
+      return {
+        symbol: holding.symbol,
+        name: holding.name,
+        currency: holding.currency,
+        kind: profile?.kind ?? "other",
+        logo: logos.symbols.get(holding.symbol) ?? null,
+        sector: profile?.sector ?? null,
+        country: profile?.country ?? null,
+        closes: alignCloses(days, upstream.closes.get(holding.symbol), session),
+      };
+    }),
   };
 }

@@ -35,13 +35,17 @@ const FILM = {
 };
 
 /** A portfolio view cut down to what the tile reads: the whole portfolio
- *  first, an index that starts after the axis does, a benchmark. */
+ *  first, series that start after the axis does, a benchmark. */
 const PORTFOLIO = {
   days: ["2026-06-30", "2026-07-01", "2026-07-20", "2026-07-23", "2026-07-24", "2026-10-23"],
   benchmark: { symbol: "VOO", label: "S&P 500", closes: [600, 601, 610, 612, 615, 650] },
   accounts: [
-    { id: "all", index: [null, 1, 1.02, 1.05, 1.04, 1.1] },
-    { id: "ibkr", index: [1, 1, 1, 1, 1, 1] },
+    {
+      id: "all",
+      value: [null, 0.5, 0.51, 1.05, 1.04, 1.1],
+      invested: [null, 0.5, 0.5, 1, 1, 1],
+    },
+    { id: "ibkr", value: [1, 1, 1, 1, 1, 1], invested: [1, 1, 1, 1, 1, 1] },
   ],
   symbols: [],
 };
@@ -49,7 +53,8 @@ const PORTFOLIO = {
 /** From the last session on or before Jul 23, three months before. */
 const PORTFOLIO_TILE = {
   days: ["2026-07-23", "2026-07-24", "2026-10-23"],
-  index: [1.05, 1.04, 1.1],
+  value: [1.05, 1.04, 1.1],
+  invested: [1, 1, 1],
   benchmark: [612, 615, 650],
 };
 
@@ -177,14 +182,21 @@ describe("pickPortfolio", () => {
     expect(pickPortfolio(PORTFOLIO as never)).toEqual(PORTFOLIO_TILE);
   });
 
-  it("starts where the index does when that is later", () => {
+  it("starts where the account does when that is later", () => {
     const young = {
       ...PORTFOLIO,
-      accounts: [{ id: "all", index: [null, null, null, null, 1, 1.1] }],
+      accounts: [
+        {
+          id: "all",
+          value: [null, null, null, null, 1, 1.1],
+          invested: [null, null, null, null, 1, 1],
+        },
+      ],
     };
     expect(pickPortfolio(young as never)).toEqual({
       days: ["2026-07-24", "2026-10-23"],
-      index: [1, 1.1],
+      value: [1, 1.1],
+      invested: [1, 1],
       benchmark: [615, 650],
     });
   });
@@ -194,7 +206,13 @@ describe("pickPortfolio", () => {
     expect(pickPortfolio({ ...PORTFOLIO, accounts: [] } as never)).toBeNull();
     const fresh = {
       ...PORTFOLIO,
-      accounts: [{ id: "all", index: [null, null, null, null, null, 1] }],
+      accounts: [
+        {
+          id: "all",
+          value: [null, null, null, null, null, 1],
+          invested: [null, null, null, null, null, 1],
+        },
+      ],
     };
     expect(pickPortfolio(fresh as never)).toBeNull();
   });

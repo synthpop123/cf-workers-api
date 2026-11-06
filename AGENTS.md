@@ -340,67 +340,76 @@ production.
 
 ## portfolio
 
-- The ledger is **Ghostfolio's** (`GHOSTFOLIO_URL`, self-hosted on the arm
-  host; its compose lives in homelab-infra `stacks/ghostfolio`). Activities
-  are recorded there, never here, and this Worker stores nothing but the
-  snapshot. It signs in as a separate bot user (`GHOSTFOLIO_TOKEN`, that
-  user's security token → `POST /api/v1/auth/anonymous` → JWT) and reads
-  the owner's portfolio through a PRIVATE access the owner granted it,
-  sent as `Impersonation-Id: GHOSTFOLIO_ACCESS_ID`. The grant must carry
-  `portfolio:read:values` ("View", not "Restricted view"): the index is
-  computed from money amounts, which a restricted grant redacts — the
-  narrower then fails loudly rather than shipping zeros. It expires
-  (`Access.expiresAt`, currently 2027-10); a lapsed grant is a failed
-  composition and the last good copy keeps serving.
-- **The payload is returns, never amounts.** `services/portfolio/ghostfolio.ts`
-  types only what composition reads; `compose.ts` turns each chart into a
-  time-weighted growth index (`growthIndex`: daily gain over the previous
-  close plus that day's money in) and ships that, the holdings' weights,
-  cash's weight, and public closes. Ghostfolio's own percentages (ROAI,
-  ROI) are deliberately not read for the index: neither chains day to
-  day, so neither can be cut to a range or set beside an index. The one
-  read is each holding's lifetime `performance`, under the owner's
-  calculation setting, kept at **ROI** (gain over the sum of the buys;
-  ROAI's time-weighted denominator inflates a recently built position).
-  The tests pin that no amount reaches the body.
+- The ledger is **Wealthfolio's** (`WEALTHFOLIO_URL`, self-hosted on the
+  arm host; its compose lives in homelab-infra `stacks/wealthfolio`, with
+  `WF_MCP_ENABLED`). Activities are recorded there, never here, and this
+  Worker stores nothing but the snapshot. It reads through the MCP
+  endpoint (`/mcp`, Streamable HTTP, one session per composition, closed
+  after) with a personal access token minted in Settings → AI agent
+  access with **read scopes only** (`WEALTHFOLIO_TOKEN`). The tools it
+  calls: `get_accounts`, `get_cash_balances`, `get_valuation_history` and
+  `get_holdings` (whole portfolio and each account), and
+  `get_asset_taxonomy_assignments` once per new symbol.
+- Prices come from **Ghostfolio** (`GHOSTFOLIO_URL`) as a market-data
+  source only: a bot user (`GHOSTFOLIO_TOKEN` → `POST
+  /api/v1/auth/anonymous` → JWT) reads `/api/v1/symbol/YAHOO/<symbol>`.
+  Ghostfolio keeps history only for symbols it gathers (an activity, a
+  watchlist entry, the benchmark), so **a newly bought symbol goes on its
+  watchlist** or it ships without a line.
+- **The payload is returns, never amounts.** `wealthfolio.ts` types only
+  what composition reads. Per account `compose.ts` ships two series on the
+  axis, its value (holdings and cash) and the money put in to date, both
+  divided by the most ever put in (`capital`), so they are ratios and no
+  amount survives. The page's every return is one over the other: a
+  range's return is its gain over the value it started from plus the
+  money put in since (a deposit never reads as a gain), and over one
+  session that is the day's time-weighted return (`dayReturn`), which the
+  page chains for its strip and drawdown. Wealthfolio's own TWR/IRR are
+  not read. The tests pin that no amount reaches the body.
 - Per position it also ships the **average price paid per share**
-  (`cost`: investment over quantity, divided in `ghostfolio.ts` so neither
-  leaves it, at today's valuation rate) and the first buy's day
-  (`since`); per symbol a stock's sector, its dominant country and its
-  site from the asset profile. A per-share price without a share count is
-  not a sum — keep it that way: never ship the quantity or a trade.
+  (`cost`: cost basis over quantity, divided in `wealthfolio.ts`), the
+  position's own return (Wealthfolio's `totalReturnPct`: gain, realised,
+  unrealised and income, over what went into it) and the first buy's day
+  (`since`); per symbol its kind, a stock's GICS sector and its dominant
+  country from the classifications, carried over from the stored body so
+  each is asked once. A per-share price without a share count is not a
+  sum — keep it that way: never ship the quantity or a trade.
+  `get_holdings` lists a page of positions and leaves the smallest out;
+  weights still divide by the account's full total.
+- Accounts show under the short name and broker logo `BROKERS` gives by
+  their Wealthfolio name (`Interactive Brokers` → `IBKR`,
+  interactivebrokers.com); an account not there keeps its own name and no
+  logo.
 - Days on less than `MIN_CAPITAL` (100, base currency) earn no return, so
-  an account that held only dust (a one-dollar position) starts its index
-  the day real money went in.
-- The ledger is entered in **split-adjusted** terms: Yahoo rewrites
-  history after a split, Ghostfolio does not rewrite activities, so a
-  trade from before a split must be re-entered at its post-split
-  quantity and price (MVIS's 1:15 of 2026-08-01 is in Schwab that way,
-  with the original in the activity's comment). A position valued far
-  from what was paid on its first day is the symptom.
-- Days are **US market sessions**, not Shanghai days. Ghostfolio buckets
-  its chart by its server zone (Asia/Shanghai — the `Timezone` header
-  changes nothing) and values the last day at the live quote, so from
-  Shanghai midnight until the next New York open that day is the
-  previous session again. `toSessions` folds every day from
-  `marketSession(now)` on into that session; holiday calendars are not
-  modelled. Weekends drop off the axis; days older than `DAILY_DAYS` thin
-  to one a week.
+  an account that held only dust starts the day real money went in.
+- The ledger is entered in **split-adjusted** terms: Yahoo rewrites price
+  history after a split and the ledger keeps what was entered, so a trade
+  from before a split is entered at its post-split quantity and price
+  (MVIS's 1:15 of 2026-08-01, in Schwab, with the original in the
+  comment). A position valued far from what was paid on its first day is
+  the symptom.
+- Days are **US market sessions**, not Shanghai days. Wealthfolio dates
+  its valuations by its server zone (Asia/Shanghai) and values the last
+  day at the latest quote, so from Shanghai midnight until the next New
+  York open that day is the previous session again. `toSessions` folds
+  every day from `marketSession(now)` on into that session; holiday
+  calendars are not modelled. Weekends drop off the axis; days older than
+  `DAILY_DAYS` thin to one a week.
 - Each account also ships its **best days** (`best`, `bestDays`): newest
-  first, every session whose move beat all the ones after it, read off
-  the daily index before the axis thins it. The page's Best day for a
-  range is the earliest entry dated after the range's start, so any range
-  (ALL included, weekly on the axis) gets a daily answer with no range
-  logic here.
-- A composition is ~20 Ghostfolio requests (sign-in, accounts, a chart and
-  holdings for the portfolio and each account, one price history per
-  holding plus VOO), hence its own `offset: 5` minute in the hourly slot.
-  A holding whose history fails ships without a line; anything else
-  fails the composition.
+  first, every session whose return beat all the ones after it, read off
+  the daily returns before the axis thins them. The page's Best day for a
+  range is the earliest entry dated after the range's start.
+- A composition is about two dozen requests (a Wealthfolio session: the
+  accounts, cash, a history and holdings for the portfolio and each
+  account, a classification per new symbol; a Ghostfolio sign-in and one
+  price history per holding plus VOO), hence its own `offset: 5` minute
+  in the hourly slot. A holding whose history fails ships without a line;
+  anything else fails the composition.
 - Logos come from logo.dev's ticker lookup (`LOGO_DEV_TOKEN`, a
   publishable key that still never reaches a browser), mirrored once per
-  ticker as `portfolio/logos/<TICKER>-96.webp`. Delete the object to pick up
-  a new logo. `lib/images.ts` logs a failed mirror by key, not source URL,
+  ticker as `portfolio/logos/<TICKER>-96.webp`, brokers by domain as
+  `portfolio/brokers/<domain>-96.webp`. Delete the object to pick up a new
+  logo. `lib/images.ts` logs a failed mirror by key, not source URL,
   because this source carries the key.
 
 ## memos

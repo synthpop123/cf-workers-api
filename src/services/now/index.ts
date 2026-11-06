@@ -27,7 +27,7 @@ import type { Site as PortfolioSite } from "../portfolio/compose";
 import { portfolioSite } from "../portfolio";
 import { tokensSite } from "../tokens/site";
 
-export const SITE_VERSION = 4;
+export const SITE_VERSION = 5;
 
 /** Days of token totals the tile's bars draw, today last. */
 export const TOKENS_DAYS = 14;
@@ -50,12 +50,13 @@ export interface TokensToday {
 
 /** The whole portfolio over its last PORTFOLIO_MONTHS: a window of the
  *  portfolio view's own series, from the session the range is measured
- *  from to the latest, so the return is the last value over the first. */
+ *  from to the latest, so the page measures it as /misc measures 3M. */
 export interface Portfolio {
   /** Market sessions, oldest first. */
   days: string[];
-  /** The growth index on `days`. */
-  index: number[];
+  /** Value and money put in on `days`, the portfolio view's ratios. */
+  value: number[];
+  invested: number[];
   /** The benchmark's closes on `days`. */
   benchmark: number[];
 }
@@ -159,11 +160,19 @@ export function pickPortfolio(site: PortfolioSite | null): Portfolio | null {
   const cutoff = shiftMonths(days[days.length - 1] ?? "", -PORTFOLIO_MONTHS);
   let start = 0;
   for (let i = 0; i < days.length && days[i] <= cutoff; i++) start = i;
-  start = Math.max(start, all.index.findIndex(isNumber), closes.findIndex(isNumber));
-  const index = all.index.slice(start);
+  start = Math.max(start, all.value.findIndex(isNumber), closes.findIndex(isNumber));
+  const value = all.value.slice(start);
+  const invested = all.invested.slice(start);
   const benchmark = closes.slice(start);
-  if (index.length < 2 || !index.every(isNumber) || !benchmark.every(isNumber)) return null;
-  return { days: days.slice(start), index, benchmark };
+  if (
+    value.length < 2 ||
+    !value.every(isNumber) ||
+    !invested.every(isNumber) ||
+    !benchmark.every(isNumber)
+  ) {
+    return null;
+  }
+  return { days: days.slice(start), value, invested, benchmark };
 }
 
 export const nowSite: Snapshot = {

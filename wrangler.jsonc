@@ -27,11 +27,11 @@
     "MASTODON_URL": "https://mastodon.lkwplus.com",
     "MASTODON_ACCOUNT": "114671030739656846",
     "MASTODON_USER": "lkw123",
-    // The self-hosted Ghostfolio the portfolio service reads, and the id of
-    // the read-only access its owner granted the bot user it signs in as
-    // (sent as Impersonation-Id).
-    "GHOSTFOLIO_URL": "https://ghostfolio.lkwplus.com",
-    "GHOSTFOLIO_ACCESS_ID": "245c4b96-e08b-41f7-9217-28703aaf5fe2"
+    // The portfolio service's ledger (the self-hosted Wealthfolio, read
+    // through its MCP endpoint) and its prices (the self-hosted
+    // Ghostfolio, as a market-data source).
+    "WEALTHFOLIO_URL": "https://wealthfolio.lkwplus.com",
+    "GHOSTFOLIO_URL": "https://ghostfolio.lkwplus.com"
   },
 
   // Set with `npx wrangler secret put <NAME>`; .dev.vars locally. Declared
@@ -48,8 +48,11 @@
       "PCTL_SESSION_TOKEN",
       // AirTrail API key (sent as Authorization: Bearer).
       "AIRTRAIL_API_KEY",
+      // Read-only personal access token for Wealthfolio's MCP endpoint
+      // (Settings → AI agent access), the portfolio service's ledger.
+      "WEALTHFOLIO_TOKEN",
       // Security token of the Ghostfolio bot user the portfolio service
-      // signs in as.
+      // signs in as for prices.
       "GHOSTFOLIO_TOKEN",
       // logo.dev publishable key, for the portfolio logos the Worker mirrors.
       "LOGO_DEV_TOKEN"

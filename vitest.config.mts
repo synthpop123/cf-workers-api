@@ -17,6 +17,7 @@ const TEST_SECRETS = {
   SWITCH_API_TOKEN: "test-switch-token",
   PCTL_SESSION_TOKEN: "test-session-token",
   AIRTRAIL_API_KEY: "test-key",
+  WEALTHFOLIO_TOKEN: "test-wealthfolio-token",
   GHOSTFOLIO_TOKEN: "test-ghostfolio-token",
   LOGO_DEV_TOKEN: "test-logo-token",
 };

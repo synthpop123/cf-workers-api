@@ -11,11 +11,12 @@
  * `fallback=404` makes an unknown ticker a miss rather than logo.dev's
  * lettered placeholder, so the page draws its own monogram instead.
  *
- * Brokers are looked up the same way by the domain of the account's
- * platform in Ghostfolio (`portfolio/brokers/<domain>-96.webp`).
+ * Brokers are looked up the same way by their site's domain, which
+ * `BROKERS` names per account (`portfolio/brokers/<domain>-96.webp`).
  */
 
 import { mirrorImage, publicUrl, type Size } from "../../lib/images";
+import { BROKERS } from "./compose";
 
 const SIZE: Size = { width: 96, height: 96 };
 const TICKER_RE = /^[A-Z0-9][A-Z0-9.-]{0,15}$/;
@@ -24,23 +25,6 @@ const TICKER_RE = /^[A-Z0-9][A-Z0-9.-]{0,15}$/;
  *  exchange ticker (a fund ISIN, a crypto id). */
 export function logoKey(symbol: string): string | null {
   return TICKER_RE.test(symbol) ? `portfolio/logos/${symbol}-${SIZE.width}.webp` : null;
-}
-
-const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
-
-/** `https://www.hsbc.com.hk/x` → `hsbc.com.hk`, or null for anything
- *  that isn't a plain https/http site. */
-export function brokerDomain(url: string | null): string | null {
-  if (!url) return null;
-  try {
-    const { protocol, hostname } = new URL(url);
-    const domain = hostname.toLowerCase().replace(/^www\./, "");
-    return (protocol === "https:" || protocol === "http:") && DOMAIN_RE.test(domain)
-      ? domain
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function logoDev(path: string, token: string): string {
@@ -70,12 +54,12 @@ async function mirrored(
 /** Mirror each broker's logo, by account id. */
 export async function mirrorBrokers(
   env: Env,
-  accounts: { id: string; platformUrl: string | null }[],
+  accounts: { id: string; name: string }[],
   known: ReadonlySet<string>
 ): Promise<Map<string, string | null>> {
   const entries = await Promise.all(
-    accounts.map(async ({ id, platformUrl }) => {
-      const domain = brokerDomain(platformUrl);
+    accounts.map(async ({ id, name }) => {
+      const domain = BROKERS[name]?.domain;
       if (!domain) return [id, null] as const;
       return [
         id,

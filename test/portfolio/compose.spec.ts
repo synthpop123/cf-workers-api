@@ -3,8 +3,10 @@ import {
   alignCloses,
   axis,
   bestDays,
+  capital,
   composeSite,
   DAILY_DAYS,
+  dayReturn,
   growthIndex,
   heldSymbols,
   marketSession,
@@ -12,39 +14,49 @@ import {
   slug,
   toSessions,
   type Upstream,
+  weigh,
 } from "../../src/services/portfolio/compose";
-import type { GfDay, GfHolding } from "../../src/services/portfolio/ghostfolio";
+import type { WfDay, WfHolding } from "../../src/services/portfolio/wealthfolio";
 
-const day = (date: string, value: number, netPerformance: number, investment = 0): GfDay => ({
-  date,
-  value,
-  netPerformance,
-  investment,
-});
+const day = (date: string, value: number, invested: number): WfDay => ({ date, value, invested });
 
-const holding = (symbol: string, weight: number, extra: Partial<GfHolding> = {}): GfHolding => ({
+const holding = (symbol: string, value: number, extra: Partial<WfHolding> = {}): WfHolding => ({
   symbol,
-  dataSource: "YAHOO",
   name: `${symbol} Inc.`,
   currency: "USD",
-  subClass: "STOCK",
-  cash: false,
-  weight,
+  value,
   performance: 0.25,
   cost: 400,
   since: "2026-01-02",
-  sector: "Technology",
-  country: "US",
-  url: "https://example.com",
   ...extra,
 });
 
+describe("dayReturn", () => {
+  it("is the gain over the close before plus the day's money in", () => {
+    // 1,000 at work, 9,000 put in, 11,000 at the close: 10% on 10,000.
+    expect(dayReturn(day("2026-01-01", 1000, 1000), day("2026-01-02", 11_000, 10_000))).toBeCloseTo(
+      0.1
+    );
+  });
+
+  it("adds money taken out back to the close", () => {
+    // 10,000 at work, 5,000 taken out, 5,500 left: 5% on 10,000.
+    expect(dayReturn(day("2026-01-01", 10_000, 10_000), day("2026-01-02", 5500, 5000))).toBeCloseTo(
+      0.05
+    );
+  });
+
+  it("is null on dust", () => {
+    expect(dayReturn(day("2026-01-01", 1.28, 1.28), day("2026-01-02", 8.66, 1.28))).toBeNull();
+  });
+});
+
 describe("growthIndex", () => {
-  it("starts at 1 the day before money goes in and chains each day's gain", () => {
+  it("starts at 1 the day before money goes in and chains each day's return", () => {
     const index = growthIndex([
       day("2026-01-01", 0, 0),
-      day("2026-01-02", 1010, 10, 1000),
-      day("2026-01-05", 1111, 111),
+      day("2026-01-02", 1010, 1000),
+      day("2026-01-05", 1111, 1000),
     ]);
     expect([...index.keys()]).toEqual(["2026-01-01", "2026-01-02", "2026-01-05"]);
     expect(index.get("2026-01-02")).toBeCloseTo(1.01);
@@ -54,44 +66,26 @@ describe("growthIndex", () => {
   it("does not move when money comes in or goes out", () => {
     const index = growthIndex([
       day("2026-01-01", 0, 0),
-      day("2026-01-02", 1000, 0, 1000),
-      // A deposit of 9,000 on a flat day, then a 10% day on 10,000.
-      day("2026-01-05", 10_000, 0, 9000),
-      day("2026-01-06", 11_000, 1000),
-      // Half sold at cost, no gain: the index holds.
-      day("2026-01-07", 5500, 1000, -5500),
+      day("2026-01-02", 1000, 1000),
+      day("2026-01-05", 10_000, 10_000),
+      day("2026-01-06", 11_000, 10_000),
+      day("2026-01-07", 1000, 0),
     ]);
     expect(index.get("2026-01-05")).toBeCloseTo(1);
     expect(index.get("2026-01-06")).toBeCloseTo(1.1);
     expect(index.get("2026-01-07")).toBeCloseTo(1.1);
   });
 
-  it("counts a gain realised on the day it is sold", () => {
-    const index = growthIndex([
-      day("2026-01-01", 0, 0),
-      day("2026-01-02", 1000, 0, 1000),
-      // Everything sold for 1,100: value 0, gain 100 that day.
-      day("2026-01-05", 0, 100, -1000),
-      // Nothing held: the index rests.
-      day("2026-01-06", 0, 100),
-    ]);
-    expect(index.get("2026-01-05")).toBeCloseTo(1.1);
-    expect(index.get("2026-01-06")).toBeCloseTo(1.1);
-  });
-
   it("earns nothing on dust, and starts once real money is in", () => {
     const index = growthIndex([
-      day("2026-01-01", 0, 0),
-      // A one-dollar position that loses almost everything.
-      day("2026-01-02", 1, 0, 1),
-      day("2026-01-05", 0.1, -0.9),
-      // Then a real buy, and a 10% day on it.
-      day("2026-01-06", 1000.1, -0.9, 1000),
-      day("2026-01-07", 1100.1, 99.1),
+      day("2026-03-11", 1.28, 1.28),
+      day("2026-03-12", 8.66, 1.28),
+      day("2026-09-16", 1.3, 1.28),
+      day("2026-09-17", 510, 510),
+      day("2026-09-18", 561, 510),
     ]);
-    expect([...index.keys()][0]).toBe("2026-01-05");
-    expect(index.get("2026-01-06")).toBeCloseTo(1);
-    expect(index.get("2026-01-07")).toBeCloseTo(1.1);
+    expect([...index.keys()]).toEqual(["2026-09-16", "2026-09-17", "2026-09-18"]);
+    expect(index.get("2026-09-18")).toBeCloseTo(1.1, 2);
   });
 
   it("is empty for an account that never held anything", () => {
@@ -148,15 +142,30 @@ describe("marketSession", () => {
 describe("toSessions", () => {
   it("folds the days after the session into it", () => {
     const folded = toSessions(
-      [day("2026-10-20", 100, 0), day("2026-10-21", 101, 1), day("2026-10-22", 152, 2, 50)],
+      [day("2026-10-20", 100, 100), day("2026-10-21", 101, 100), day("2026-10-22", 152, 150)],
       "2026-10-21"
     );
-    expect(folded).toEqual([day("2026-10-20", 100, 0), day("2026-10-21", 152, 2, 50)]);
+    expect(folded).toEqual([day("2026-10-20", 100, 100), day("2026-10-21", 152, 150)]);
   });
 
-  it("leaves a chart that ends on the session alone", () => {
-    const chart = [day("2026-10-21", 100, 0), day("2026-10-22", 101, 1)];
-    expect(toSessions(chart, "2026-10-22")).toBe(chart);
+  it("leaves a history that ends on the session alone", () => {
+    const history = [day("2026-10-21", 100, 100), day("2026-10-22", 101, 100)];
+    expect(toSessions(history, "2026-10-22")).toBe(history);
+  });
+});
+
+describe("capital", () => {
+  it("divides value and money in by the most ever put in, from the start", () => {
+    const history = [
+      day("2026-01-01", 1, 1),
+      day("2026-01-02", 1000, 1000),
+      day("2026-01-03", 1500, 2000), // a Saturday deposit, then a fall
+      day("2026-01-05", 2500, 2000),
+    ];
+    expect(capital(["2025-12-31", "2026-01-02", "2026-01-05"], history, "2026-01-02")).toEqual({
+      value: [null, 0.5, 1.25],
+      invested: [null, 0.5, 1],
+    });
   });
 });
 
@@ -213,43 +222,67 @@ describe("slug", () => {
 });
 
 describe("heldSymbols", () => {
-  it("drops cash and closed positions, heaviest first", () => {
+  it("drops closed positions, heaviest first, once", () => {
     const held = heldSymbols([
-      holding("USD", 0.1, { cash: true, subClass: "CASH" }),
       holding("KO", 0),
-      holding("MSFT", 0.05),
-      holding("BOXX", 0.75, { subClass: "ETF" }),
+      holding("MSFT", 50),
+      holding("BOXX", 750),
+      holding("MSFT", 50),
     ]);
     expect(held.map((h) => h.symbol)).toEqual(["BOXX", "MSFT"]);
   });
 });
 
+describe("weigh", () => {
+  it("shares everything in the account, cash included, by currency", () => {
+    const weighed = weigh(
+      // NVDA is left off the list but counted in the total.
+      { holdings: [holding("BOXX", 700), holding("MSFT", 100)], total: 900 },
+      [
+        { currency: "USD", value: 60 },
+        { currency: "CNH", value: 40 },
+      ]
+    );
+    expect(weighed.holdings.map((h) => [h.symbol, h.weight])).toEqual([
+      ["BOXX", 0.7],
+      ["MSFT", 0.1],
+    ]);
+    expect(weighed.cash).toEqual([
+      { currency: "USD", weight: 0.06 },
+      { currency: "CNH", weight: 0.04 },
+    ]);
+  });
+});
+
 describe("composeSite", () => {
-  const chart = [
+  const history = [
     day("2026-01-01", 0, 0),
-    day("2026-01-02", 1000, 0, 1000),
-    day("2026-01-05", 1100, 100),
+    day("2026-01-02", 1000, 1000),
+    day("2026-01-05", 1100, 1000),
   ];
   const upstream = (): Upstream => ({
     portfolio: {
-      chart,
-      holdings: [
-        holding("MSFT", 0.9),
-        holding("USD", 0.1, { cash: true, subClass: "CASH", name: "US Dollar" }),
-      ],
+      days: history,
+      holdings: { holdings: [holding("MSFT", 990)], total: 990 },
+      cash: [{ currency: "USD", value: 110 }],
     },
     accounts: [
       {
-        account: { id: "a1", name: "IBKR", platformUrl: null },
-        chart,
-        holdings: [holding("MSFT", 1)],
+        account: { id: "a1", name: "Interactive Brokers" },
+        days: history,
+        holdings: { holdings: [holding("MSFT", 1100)], total: 1100 },
+        cash: [],
       },
       {
-        account: { id: "a2", name: "Empty", platformUrl: null },
-        chart: [day("2026-01-01", 0, 0)],
-        holdings: [],
+        account: { id: "a2", name: "Empty" },
+        days: [day("2026-01-01", 0, 0)],
+        holdings: { holdings: [], total: 0 },
+        cash: [],
       },
     ],
+    profiles: new Map([
+      ["MSFT", { kind: "stock", sector: "Information Technology", country: "US" }],
+    ]),
     closes: new Map([
       [
         "MSFT",
@@ -266,7 +299,7 @@ describe("composeSite", () => {
     benchmark: { marketPrice: 700, closes: [{ date: "2026-01-01", close: 600 }] },
   });
 
-  it("ships returns, weights and public prices only", () => {
+  it("ships ratios, weights and public prices only", () => {
     const site = composeSite(
       upstream(),
       {
@@ -278,14 +311,14 @@ describe("composeSite", () => {
     );
     expect(site.schemaVersion).toBe(SITE_VERSION);
     expect(site.days).toEqual(["2026-01-01", "2026-01-02", "2026-01-05"]);
-    expect(site.accounts.map((a) => [a.id, a.name])).toEqual([
-      ["all", "All accounts"],
-      ["ibkr", "IBKR"],
+    expect(site.accounts.map((a) => [a.id, a.name, a.logo])).toEqual([
+      ["all", "All accounts", null],
+      ["ibkr", "IBKR", "https://img.test/ibkr.webp"],
     ]);
     expect(site.accounts[0]).toMatchObject({
-      index: [1, 1, 1.1],
+      value: [0, 1, 1.1],
+      invested: [0, 1, 1],
       best: [{ date: "2026-01-05", change: 0.1 }],
-      logo: null,
       holdings: [
         { symbol: "MSFT", weight: 0.9, performance: 0.25, cost: 400, since: "2026-01-02" },
       ],
@@ -299,23 +332,23 @@ describe("composeSite", () => {
         currency: "USD",
         kind: "stock",
         logo: "https://img.test/msft.webp",
-        sector: "Technology",
+        sector: "Information Technology",
         country: "US",
-        url: "https://example.com",
         closes: [400, 410, 500],
       },
     ]);
     expect(site.benchmark).toEqual({ symbol: "VOO", label: "S&P 500", closes: [600, 600, 700] });
 
-    // No amount Ghostfolio sent reaches the body.
+    // No amount the ledger sent reaches the body.
     const text = JSON.stringify(site);
-    for (const amount of ["1000", "1100", "investment", "value", "quantity"]) {
-      expect(text).not.toContain(amount);
-    }
+    for (const amount of ["1000", "1100", "990", "110"]) expect(text).not.toContain(amount);
   });
 
   it("refuses a portfolio with no history", () => {
-    const empty = { ...upstream(), portfolio: { chart: [day("2026-01-01", 0, 0)], holdings: [] } };
+    const empty = {
+      ...upstream(),
+      portfolio: { ...upstream().portfolio, days: [day("2026-01-01", 0, 0)] },
+    };
     expect(() =>
       composeSite(empty, { symbols: new Map(), accounts: new Map() }, "2026-01-06", "2026-01-05")
     ).toThrow(/no history/);

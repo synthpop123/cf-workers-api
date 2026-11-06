@@ -61,8 +61,9 @@ describe("runScheduled", () => {
 
     hosts.length = 0;
     await runScheduled("*/5 * * * *", local("10:05"), env);
+    // The portfolio job opens its ledger first, and the stub fails it there.
     expect(new Set(hosts)).toEqual(
-      new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "ghostfolio.lkwplus.com"])
+      new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "wealthfolio.lkwplus.com"])
     );
 
     hosts.length = 0;

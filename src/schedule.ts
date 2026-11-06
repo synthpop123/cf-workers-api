@@ -18,8 +18,9 @@
  *                             flight change when a flight is logged, and
  *                             `upcoming` flips at midnight, which is on
  *                             the hour
- *                   portfolio hourly at five past — about twenty
- *                             Ghostfolio requests, so off the hour, where
+ *                   portfolio hourly at five past — about two dozen
+ *                             Wealthfolio and Ghostfolio requests, so off
+ *                             the hour, where
  *                             flights and movies spend the trigger's
  *                             subrequests; a session's moves show within
  *                             the hour, and the day rolls at 00:05
