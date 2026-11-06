@@ -27,7 +27,7 @@
     "check": "npm run types && npm run lint && tsc -p test --noEmit && vitest run"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.3",
+    "@biomejs/biome": "2.6.4",
     "@cloudflare/vitest-plugin": "^1.4.11",
     "typescript": "^7.0.2",
     "vitest": "^4.1.12",
