@@ -384,6 +384,10 @@ production.
   their Wealthfolio name (`Interactive Brokers` → `IBKR`,
   interactivebrokers.com); an account not there keeps its own name and no
   logo.
+- Cash ships only in US dollars (`CASH_CURRENCY`): what else a broker
+  leaves (IBKR's CNH interest, an HKD conversion's change) is dust, kept
+  out of the cash rows and out of the weights' total. The value series
+  still include it, as Wealthfolio values it.
 - Days on less than `MIN_CAPITAL` (100, base currency) earn no return, so
   an account that held only dust starts the day real money went in.
 - The ledger is entered in **split-adjusted** terms: Yahoo rewrites price

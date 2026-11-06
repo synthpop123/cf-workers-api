@@ -234,23 +234,30 @@ describe("heldSymbols", () => {
 });
 
 describe("weigh", () => {
-  it("shares everything in the account, cash included, by currency", () => {
+  it("shares everything in the account, US dollar cash included", () => {
     const weighed = weigh(
       // NVDA is left off the list but counted in the total.
       { holdings: [holding("BOXX", 700), holding("MSFT", 100)], total: 900 },
       [
-        { currency: "USD", value: 60 },
-        { currency: "CNH", value: 40 },
+        { currency: "USD", value: 50 },
+        { currency: "USD", value: 50 },
       ]
     );
     expect(weighed.holdings.map((h) => [h.symbol, h.weight])).toEqual([
       ["BOXX", 0.7],
       ["MSFT", 0.1],
     ]);
-    expect(weighed.cash).toEqual([
-      { currency: "USD", weight: 0.06 },
-      { currency: "CNH", weight: 0.04 },
+    expect(weighed.cash).toEqual([{ currency: "USD", weight: 0.1 }]);
+  });
+
+  it("leaves cash in any other currency out of the weights", () => {
+    const weighed = weigh({ holdings: [holding("BOXX", 900)], total: 900 }, [
+      { currency: "USD", value: 100 },
+      { currency: "CNY", value: 40 },
+      { currency: "HKD", value: 1 },
     ]);
+    expect(weighed.holdings.map((h) => [h.symbol, h.weight])).toEqual([["BOXX", 0.9]]);
+    expect(weighed.cash).toEqual([{ currency: "USD", weight: 0.1 }]);
   });
 });
 

@@ -40,6 +40,11 @@ export const DAILY_DAYS = 366;
  *  that only ever held dust before starts the day real money went in. */
 export const MIN_CAPITAL = 100;
 
+/** The one currency whose cash the page shows. The rest is what a broker
+ *  leaves behind (IBKR's CNH interest, an HKD conversion's change): too
+ *  little to read as a position, so it is left out of the weights too. */
+export const CASH_CURRENCY = "USD";
+
 /** How each account shows on the page — a short name, and the broker's
  *  site for its logo — keyed by its name in Wealthfolio. An account not
  *  here keeps its own name and goes without a logo. */
@@ -280,15 +285,17 @@ export interface SiteCash {
   weight: number;
 }
 
-/** Holdings and cash, each as a share of everything in the account. */
+/** Holdings and cash, each as a share of everything in the account;
+ *  only `CASH_CURRENCY` cash counts. */
 export function weigh(
   { holdings, total }: WfHoldings,
   cash: WfCash[]
 ): { holdings: SiteHolding[]; cash: SiteCash[] } {
-  const whole = total + cash.reduce((sum, entry) => sum + entry.value, 0);
+  const kept = cash.filter((entry) => entry.currency === CASH_CURRENCY);
+  const whole = total + kept.reduce((sum, entry) => sum + entry.value, 0);
   const share = (value: number) => (whole > 0 ? roundWeight(value / whole) : 0);
   const byCurrency = new Map<string, number>();
-  for (const entry of cash) {
+  for (const entry of kept) {
     byCurrency.set(entry.currency, (byCurrency.get(entry.currency) ?? 0) + entry.value);
   }
   return {
