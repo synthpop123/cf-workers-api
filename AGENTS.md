@@ -340,22 +340,28 @@ production.
 
 ## portfolio
 
-- The ledger is **Wealthfolio's** (`WEALTHFOLIO_URL`, self-hosted on the
-  arm host; its compose lives in homelab-infra `stacks/wealthfolio`, with
-  `WF_MCP_ENABLED`). Activities are recorded there, never here, and this
-  Worker stores nothing but the snapshot. It reads through the MCP
-  endpoint (`/mcp`, Streamable HTTP, one session per composition, closed
-  after) with a personal access token minted in Settings → AI agent
-  access with **read scopes only** (`WEALTHFOLIO_TOKEN`). The tools it
-  calls: `get_accounts`, `get_cash_balances`, `get_valuation_history` and
-  `get_holdings` (whole portfolio and each account), and
-  `get_asset_taxonomy_assignments` once per new symbol.
-- Prices come from **Ghostfolio** (`GHOSTFOLIO_URL`) as a market-data
-  source only: a bot user (`GHOSTFOLIO_TOKEN` → `POST
-  /api/v1/auth/anonymous` → JWT) reads `/api/v1/symbol/YAHOO/<symbol>`.
-  Ghostfolio keeps history only for symbols it gathers (an activity, a
-  watchlist entry, the benchmark), so **a newly bought symbol goes on its
-  watchlist** or it ships without a line.
+- The owner records the portfolio in **both** Wealthfolio and Ghostfolio
+  (self-hosted on the arm host; composes in homelab-infra
+  `stacks/wealthfolio`, with `WF_MCP_ENABLED`, and `stacks/ghostfolio`),
+  and each answers what it is good at: **the money from Wealthfolio**
+  (`WEALTHFOLIO_URL`), **the securities from Ghostfolio**
+  (`GHOSTFOLIO_URL`). This Worker stores nothing but the snapshot.
+- Wealthfolio is read through its MCP endpoint (`/mcp`, Streamable HTTP,
+  one session per composition, closed after) with a personal access
+  token minted in Settings → AI agent access with **read scopes only**
+  (`WEALTHFOLIO_TOKEN`). The tools it calls: `get_accounts`,
+  `get_cash_balances`, `get_valuation_history` and `get_holdings` (whole
+  portfolio and each account).
+- Ghostfolio is read by a bot user (`GHOSTFOLIO_TOKEN` → `POST
+  /api/v1/auth/anonymous` → JWT) through a PRIVATE read-only access the
+  owner granted it (`Impersonation-Id: GHOSTFOLIO_ACCESS_ID`; it expires,
+  `Access.expiresAt`, currently 2027-10): one `/api/v1/portfolio/holdings`
+  for every held symbol's asset profile (name, kind, a stock's sector, its
+  dominant country, its site — the public asset endpoint hides those from
+  a non-admin) and `/api/v1/symbol/<source>/<symbol>` for closes and VOO.
+  Ghostfolio keeps history only for symbols it gathers, so a symbol
+  missing from its ledger ships with no line and nothing said of it;
+  returns never depend on it.
 - **The payload is returns, never amounts.** `wealthfolio.ts` types only
   what composition reads. Per account `compose.ts` ships two series on the
   axis, its value (holdings and cash) and the money put in to date, both
@@ -370,9 +376,7 @@ production.
   (`cost`: cost basis over quantity, divided in `wealthfolio.ts`), the
   position's own return (Wealthfolio's `totalReturnPct`: gain, realised,
   unrealised and income, over what went into it) and the first buy's day
-  (`since`); per symbol its kind, a stock's GICS sector and its dominant
-  country from the classifications, carried over from the stored body so
-  each is asked once. A per-share price without a share count is not a
+  (`since`). A per-share price without a share count is not a
   sum — keep it that way: never ship the quantity or a trade.
   `get_holdings` lists a page of positions and leaves the smallest out;
   weights still divide by the account's full total.
@@ -401,8 +405,8 @@ production.
   range is the earliest entry dated after the range's start.
 - A composition is about two dozen requests (a Wealthfolio session: the
   accounts, cash, a history and holdings for the portfolio and each
-  account, a classification per new symbol; a Ghostfolio sign-in and one
-  price history per holding plus VOO), hence its own `offset: 5` minute
+  account; a Ghostfolio sign-in, the holdings' profiles and one price
+  history per holding plus VOO), hence its own `offset: 5` minute
   in the hourly slot. A holding whose history fails ships without a line;
   anything else fails the composition.
 - Logos come from logo.dev's ticker lookup (`LOGO_DEV_TOKEN`, a

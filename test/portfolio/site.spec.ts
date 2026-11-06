@@ -35,44 +35,24 @@ const position = (symbol: string, marketValueBase: number) => ({
   openDate: "2026-01-02",
 });
 
-const classification = (symbol: string) => ({
-  assetQuery: symbol,
-  assignments:
-    symbol === "BOXX"
-      ? [
-          {
-            taxonomyId: "instrument_type",
-            categoryKey: "ETF",
-            categoryName: "ETF",
-            weightBasisPoints: 10_000,
-          },
-          {
-            taxonomyId: "industries_gics",
-            categoryKey: "45",
-            categoryName: "Information Technology",
-            weightBasisPoints: 3869,
-          },
-        ]
-      : [
-          {
-            taxonomyId: "instrument_type",
-            categoryKey: "STOCK_COMMON",
-            categoryName: "Stock",
-            weightBasisPoints: 10_000,
-          },
-          {
-            taxonomyId: "industries_gics",
-            categoryKey: "45",
-            categoryName: "Information Technology",
-            weightBasisPoints: 10_000,
-          },
-          {
-            taxonomyId: "regions",
-            categoryKey: "country_US",
-            categoryName: "United States",
-            weightBasisPoints: 10_000,
-          },
-        ],
+const ACCESS = "245c4b96-e08b-41f7-9217-28703aaf5fe2";
+
+/** Ghostfolio's copy of a holding: only its profile is read, and its
+ *  amounts may never reach the body. */
+const profile = (symbol: string, subClass: string, assetClass = "EQUITY") => ({
+  valueInBaseCurrency: 987_648,
+  investment: 740_736,
+  assetProfile: {
+    symbol,
+    dataSource: "YAHOO",
+    name: `${symbol} Corporation`,
+    currency: "USD",
+    assetClass,
+    assetSubClass: subClass,
+    sectors: [{ name: "Technology", weight: 1 }],
+    countries: [{ code: "US", weight: subClass === "ETF" ? 0.4 : 1 }],
+    url: subClass === "STOCK" ? "https://www.example.com" : null,
+  },
 });
 
 /** What each MCP tool answers, given its arguments. */
@@ -105,8 +85,6 @@ function tool(name: string, args: Record<string, unknown>): unknown {
       return account === "a2"
         ? { holdings: [position("BOXX", 1100)], totalValue: 1100 }
         : { holdings: [position("MSFT", 660), position("BOXX", 330)], totalValue: 990 };
-    case "get_asset_taxonomy_assignments":
-      return classification(String(args.assetQuery));
     default:
       throw new Error(`unexpected tool ${name}`);
   }
@@ -121,8 +99,8 @@ const history = (base: number) => ({
 });
 
 /** A Wealthfolio MCP endpoint that checks the token and the session on
- *  every call, a Ghostfolio that checks the bot's credentials, and
- *  logo.dev. */
+ *  every call, a Ghostfolio that checks the bot's credentials and the
+ *  grant, and logo.dev. */
 function upstreams({ failCloses = false } = {}) {
   const asked: string[] = [];
   const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -171,7 +149,17 @@ function upstreams({ failCloses = false } = {}) {
       return Response.json({ authToken: "jwt" });
     }
     expect(headers.get("Authorization")).toBe("Bearer jwt");
+    expect(headers.get("Impersonation-Id")).toBe(ACCESS);
     asked.push(`ghostfolio ${url.pathname}`);
+    if (url.pathname === "/api/v1/portfolio/holdings") {
+      return Response.json({
+        holdings: [
+          profile("MSFT", "STOCK"),
+          profile("BOXX", "ETF"),
+          profile("USD", "CASH", "LIQUIDITY"),
+        ],
+      });
+    }
     if (url.pathname === "/api/v1/symbol/YAHOO/BOXX" && failCloses) {
       return new Response("nope", { status: 500 });
     }
@@ -187,12 +175,12 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("GET /portfolio/site", () => {
-  it("composes from the ledger and the prices, with no amount in it", async () => {
+  it("composes the money from Wealthfolio and the securities from Ghostfolio, with no amount in it", async () => {
     const { asked } = upstreams();
     const response = await call("/portfolio/site");
     expect(response.status).toBe(200);
     const text = await response.text();
-    for (const secret of ["1000", "1100", "123456", "740736", "185184", "990", "660"]) {
+    for (const secret of ["1000", "1100", "123456", "740736", "185184", "987648", "990", "660"]) {
       expect(text).not.toContain(secret);
     }
     const body = JSON.parse(text);
@@ -215,12 +203,14 @@ describe("GET /portfolio/site", () => {
     expect(body.symbols).toMatchObject([
       {
         symbol: "MSFT",
+        name: "MSFT Corporation",
         kind: "stock",
-        sector: "Information Technology",
+        sector: "Technology",
         country: "US",
+        url: "https://www.example.com",
         logo: "https://img.lkwplus.com/portfolio/logos/MSFT-96.webp",
       },
-      { symbol: "BOXX", kind: "etf", sector: null, country: null, logo: null },
+      { symbol: "BOXX", kind: "etf", sector: null, country: null, url: null, logo: null },
     ]);
     expect(await env.IMAGES.head("portfolio/logos/MSFT-96.webp")).not.toBeNull();
     // The portfolio and each account, once each.
@@ -246,12 +236,11 @@ describe("GET /portfolio/site", () => {
     expect(logged).toHaveBeenCalled();
   });
 
-  it("asks again for neither a logo nor a classification the stored body has", async () => {
+  it("does not ask logo.dev again for a logo the stored body links", async () => {
     const { asked } = upstreams();
     await refresh(env, portfolioSite);
     asked.length = 0;
     await refresh(env, portfolioSite);
     expect(asked.some((path) => path.startsWith("img.logo.dev/ticker/MSFT"))).toBe(false);
-    expect(asked.some((path) => path.startsWith("mcp get_asset_taxonomy_assignments"))).toBe(false);
   });
 });

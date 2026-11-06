@@ -15,15 +15,16 @@
  * — what the money did, which a deposit cannot move — and the same
  * formula over one session is that day's time-weighted return, which the
  * page chains for its day cells and its drawdown. Beside them: each
- * holding's share of its account, the average price paid per share, the
- * public daily closes of the holdings and of the benchmark, and each
- * account's best days. No quantity, trade or amount is in it.
+ * holding's share of its account and the average price paid per share
+ * (from the ledger), what each symbol is and its public daily closes and
+ * the benchmark's (from Ghostfolio), and each account's best days. No
+ * quantity, trade or amount is in it.
  */
 
-import type { GfCloses } from "./ghostfolio";
-import type { WfAccount, WfCash, WfDay, WfHolding, WfHoldings, WfProfile } from "./wealthfolio";
+import type { GfCloses, GfProfile } from "./ghostfolio";
+import type { WfAccount, WfCash, WfDay, WfHolding, WfHoldings } from "./wealthfolio";
 
-export const SITE_VERSION = 5;
+export const SITE_VERSION = 6;
 
 /** What the page compares the portfolio with: an S&P 500 fund's closes
  *  (price return, so it slightly understates the index with dividends). */
@@ -333,12 +334,14 @@ export interface SiteSymbol {
   name: string;
   /** ISO 4217, what `closes` are in. */
   currency: string;
-  kind: WfProfile["kind"];
+  kind: GfProfile["kind"];
   logo: string | null;
-  /** A stock's GICS sector; null for a fund. */
+  /** A stock's sector; null for a fund. */
   sector: string | null;
   /** ISO 3166 alpha-2, where it is mostly based. */
   country: string | null;
+  /** The company's site, https only. */
+  url: string | null;
   /** Close on each of `days`, carried over holidays; null before the
    *  first close there is. */
   closes: (number | null)[];
@@ -368,8 +371,9 @@ export interface Ledger {
 export interface Upstream {
   portfolio: Ledger;
   accounts: (Ledger & { account: WfAccount })[];
-  /** Keyed by symbol; a symbol missing here ships as `other`, unplaced. */
-  profiles: ReadonlyMap<string, WfProfile>;
+  /** Keyed by symbol; one Ghostfolio does not hold ships as `other`,
+   *  under the ledger's name, with nothing else said of it. */
+  profiles: ReadonlyMap<string, GfProfile>;
   /** Keyed by symbol. A symbol missing here ships with no closes. */
   closes: ReadonlyMap<string, GfCloses>;
   benchmark: GfCloses;
@@ -452,12 +456,13 @@ export function composeSite(
       const profile = upstream.profiles.get(holding.symbol);
       return {
         symbol: holding.symbol,
-        name: holding.name,
+        name: profile?.name ?? holding.name,
         currency: holding.currency,
         kind: profile?.kind ?? "other",
         logo: logos.symbols.get(holding.symbol) ?? null,
         sector: profile?.sector ?? null,
         country: profile?.country ?? null,
+        url: profile?.url ?? null,
         closes: alignCloses(days, upstream.closes.get(holding.symbol), session),
       };
     }),

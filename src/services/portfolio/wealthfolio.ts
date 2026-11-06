@@ -65,14 +65,6 @@ export interface WfCash {
   value: number;
 }
 
-export interface WfProfile {
-  kind: "stock" | "etf" | "other";
-  /** The GICS sector it is wholly or mostly in. */
-  sector: string | null;
-  /** ISO 3166 alpha-2 of the country it is mostly in. */
-  country: string | null;
-}
-
 export interface Wealthfolio {
   accounts(): Promise<WfAccount[]>;
   /** The whole history of one account, or of every account together. */
@@ -80,7 +72,6 @@ export interface Wealthfolio {
   holdings(accountId?: string): Promise<WfHoldings>;
   /** Cash by account id. */
   cash(): Promise<Map<string, WfCash[]>>;
-  profile(symbol: string): Promise<WfProfile>;
   /** End the MCP session. */
   close(): Promise<void>;
 }
@@ -180,35 +171,6 @@ function narrowCash(body: unknown): Map<string, WfCash[]> {
   return cash;
 }
 
-/** The category of a taxonomy that carries at least half the weight. */
-function dominant(
-  assignments: Record<string, unknown>[],
-  taxonomy: string
-): { key: string; name: string } | null {
-  let best: { key: string; name: string; weight: number } | null = null;
-  for (const entry of assignments) {
-    if (entry.taxonomyId !== taxonomy || !isNumber(entry.weightBasisPoints)) continue;
-    const key = textOrNull(entry.categoryKey);
-    const name = textOrNull(entry.categoryName);
-    if (key && name && (!best || entry.weightBasisPoints > best.weight)) {
-      best = { key, name, weight: entry.weightBasisPoints };
-    }
-  }
-  return best && best.weight >= 5000 ? best : null;
-}
-
-function narrowProfile(body: unknown): WfProfile {
-  const assignments = list(body, "assignments", "classification").filter(isRecord);
-  const type = dominant(assignments, "instrument_type")?.key;
-  const kind = type === "ETF" ? "etf" : type?.startsWith("STOCK") ? "stock" : "other";
-  const country = dominant(assignments, "regions")?.key.match(/^country_([A-Z]{2})$/);
-  return {
-    kind,
-    sector: kind === "stock" ? (dominant(assignments, "industries_gics")?.name ?? null) : null,
-    country: country ? country[1] : null,
-  };
-}
-
 /** The JSON-RPC message an MCP answer carries, from a JSON body or the
  *  last data line of an event stream. */
 function message(text: string): unknown {
@@ -282,8 +244,6 @@ export async function connect(env: Env): Promise<Wealthfolio> {
     holdings: async (accountId) =>
       narrowHoldings(await call("get_holdings", { viewMode: "table", ...scoped(accountId) })),
     cash: async () => narrowCash(await call("get_cash_balances")),
-    profile: async (symbol) =>
-      narrowProfile(await call("get_asset_taxonomy_assignments", { assetQuery: symbol })),
     close: async () => {
       if (!session) return;
       await fetch(endpoint, {

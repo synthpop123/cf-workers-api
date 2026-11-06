@@ -281,7 +281,18 @@ describe("composeSite", () => {
       },
     ],
     profiles: new Map([
-      ["MSFT", { kind: "stock", sector: "Information Technology", country: "US" }],
+      [
+        "MSFT",
+        {
+          symbol: "MSFT",
+          dataSource: "YAHOO",
+          name: "Microsoft Corporation",
+          kind: "stock",
+          sector: "Technology",
+          country: "US",
+          url: "https://www.microsoft.com",
+        },
+      ],
     ]),
     closes: new Map([
       [
@@ -328,12 +339,13 @@ describe("composeSite", () => {
     expect(site.symbols).toEqual([
       {
         symbol: "MSFT",
-        name: "MSFT Inc.",
+        name: "Microsoft Corporation",
         currency: "USD",
         kind: "stock",
         logo: "https://img.test/msft.webp",
-        sector: "Information Technology",
+        sector: "Technology",
         country: "US",
+        url: "https://www.microsoft.com",
         closes: [400, 410, 500],
       },
     ]);

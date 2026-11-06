@@ -46,7 +46,7 @@ flowchart LR
 | [`music`](src/services/music) | self-hosted [Koito](https://github.com/gabehf/Koito) | — | every 5 minutes |
 | [`movies`](src/services/movies) | Letterboxd RSS | R2 `imagebed` (posters) | every 3 hours |
 | [`memos`](src/services/memos) | self-hosted Mastodon | R2 `imagebed` (photos) | every 5 minutes |
-| [`portfolio`](src/services/portfolio) | self-hosted [Wealthfolio](https://github.com/wealthfolio/wealthfolio) (MCP) and [Ghostfolio](https://github.com/ghostfolio/ghostfolio) (prices); logo.dev | R2 `imagebed` (logos) | hourly, at five past |
+| [`portfolio`](src/services/portfolio) | self-hosted [Wealthfolio](https://github.com/wealthfolio/wealthfolio) (MCP, the money) and [Ghostfolio](https://github.com/ghostfolio/ghostfolio) (the securities); logo.dev | R2 `imagebed` (logos) | hourly, at five past |
 | [`now`](src/services/now) | the stored music, movies, tokens and portfolio views | — | every 5 minutes, right after music |
 
 - **tokens** implements the official server's submission contract and merge semantics for the `tokens` CLI — per-device, per-day, per-client replace with a regression guard, parser-revision floors, authoritative coverage windows, the official consistency checks — and keeps the full usage matrix (device × date × client × model × provider, every token category, messages, cost). Its view is the dashboard at [lkwplus.com/tokens](https://lkwplus.com/tokens), including subscription quota cards reported by a collector that keeps the vendor credentials on its own machine.
@@ -55,7 +55,7 @@ flowchart LR
 - **music** composes Koito's stats, a dense year of daily plays and the latest listens into one document.
 - **movies** parses the Letterboxd diary feed and mirrors each poster into R2.
 - **memos** reads the latest public Mastodon statuses and copies their photos into R2 as WebP at 640 and 1600 wide.
-- **portfolio** reads the portfolio kept in Wealthfolio through its MCP endpoint with a read-only token, prices it with Ghostfolio, and ships returns, never amounts: per account its value and the money put in as ratios on one scale (so the page can say what the money did over any range), each holding's weight, and the public daily closes of the holdings and of an S&P 500 fund. Company logos are mirrored into R2 from logo.dev.
+- **portfolio** reads the money from Wealthfolio (its MCP endpoint, a read-only token) and the securities from Ghostfolio (profiles and closes, through a read-only grant), and ships returns, never amounts: per account its value and the money put in as ratios on one scale (so the page can say what the money did over any range), each holding's weight, and the public daily closes of the holdings and of an S&P 500 fund. Company logos are mirrored into R2 from logo.dev.
 - **now** is the home page's Now section: the latest listen and film, today's tokens with the last two weeks, and the portfolio's last three months against the S&P 500, read from the other services' stored views rather than their upstreams.
 
 ## API
