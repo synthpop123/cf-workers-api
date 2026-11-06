@@ -4,3 +4,4 @@ node_modules/
 worker-configuration.d.ts
 # Editor scratch (Cursor writes an empty settings.json on open).
 .cursor/
+.DS_Store
