@@ -118,6 +118,28 @@ describe("composeSiteBody", () => {
     expect(site.observedAt).toBe(new Date(1787980089000).toISOString());
   });
 
+  it("keeps all-time stats over history the heatmap's year no longer draws", async () => {
+    await seed();
+    const ancient = shiftDays(today, -400);
+    const now = Date.now();
+    await env.SWITCH_DB.batch([
+      env.SWITCH_DB.prepare(
+        `INSERT INTO daily_games (device_id, date, player_id, application_id, playing_time, updated_at)
+         VALUES ('dev', ?, 'p1', 'OLD', 120, ?)`
+      ).bind(ancient, now),
+      env.SWITCH_DB.prepare(
+        `UPDATE games SET total_playing_time = 160, first_played_date = ? WHERE application_id = 'OLD'`
+      ).bind(ancient),
+    ]);
+    const site = await composeSiteBody(env);
+    const listed = site.games.reduce((sum, game) => sum + game.totalMinutes, 0);
+    expect(site.stats).toMatchObject({ totalMinutes: 225, daysActive: 3, firstDate: ancient });
+    expect(site.stats.totalMinutes).toBe(listed);
+    expect(site.stats.daysTracked).toBe(401);
+    // The heatmap still starts inside its year.
+    expect(site.activity[0]).toEqual({ date: longAgo, minutes: 40 });
+  });
+
   it("lets a hand-set name win over the store's and the console's", async () => {
     await seed();
     const [id, name] = [...TITLE_OVERRIDES][0];

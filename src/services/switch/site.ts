@@ -94,11 +94,11 @@ export async function composeSiteBody(env: Env, today = isoToday()): Promise<Sit
       env.SWITCH_DB.prepare(`SELECT rate FROM exchange_rates WHERE pair = ?`).bind(RATE_PAIR),
     ]);
 
-  const activity = denseActivity(
-    activityResult.results as { date: string; playing_time: number }[],
-    today,
-    HEATMAP_DAYS
-  );
+  const days = activityResult.results as { date: string; playing_time: number }[];
+  // The heatmap draws a year; the stats are all-time, like the lifetime
+  // minutes the games are ranked by, so they read the whole history.
+  const activity = denseActivity(days, today, HEATMAP_DAYS);
+  const history = denseActivity(days, today);
 
   const recent = new Map(
     (recentResult.results as { application_id: string; playing_time: number }[]).map((row) => [
@@ -127,7 +127,7 @@ export async function composeSiteBody(env: Env, today = isoToday()): Promise<Sit
     today,
     observedAt: observedAt ? new Date(observedAt).toISOString() : null,
     recentDays: RECENT_DAYS,
-    stats: computeStats(activity, library),
+    stats: computeStats(history, library),
     activity,
     games: library.games,
   };

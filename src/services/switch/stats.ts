@@ -39,7 +39,10 @@ export interface SiteGame {
 }
 
 /**
- * A contiguous day-by-day series ending on `today`, zero-filled.
+ * A contiguous day-by-day series ending on `today`, zero-filled, from the
+ * first played day — within the last `maxDays` when given (the heatmap's
+ * window), else over the whole history (the stats, which the page calls
+ * all-time and which must add up to the ranked list's lifetime minutes).
  *
  * Nintendo reports only days it has data for, and the heatmap renderer needs
  * a dense series — a sparse one draws a handful of cells floating in an empty
@@ -48,9 +51,9 @@ export interface SiteGame {
 export function denseActivity(
   rows: { date: string; playing_time: number }[],
   today: string,
-  maxDays: number
+  maxDays?: number
 ): SiteActivity[] {
-  const floor = shiftDays(today, -(maxDays - 1));
+  const floor = maxDays === undefined ? "" : shiftDays(today, -(maxDays - 1));
   const played = new Map<string, number>();
   for (const row of rows) {
     if (row.date >= floor && row.date <= today) played.set(row.date, row.playing_time);
@@ -89,6 +92,7 @@ function currentRun(activity: SiteActivity[]): number {
   return run;
 }
 
+/** All-time stats: `activity` is the whole dense history, never the heatmap's window. */
 export function computeStats(activity: SiteActivity[], library: Library): SiteStats {
   const active = activity.filter((day) => day.minutes > 0);
   const totalMinutes = active.reduce((sum, day) => sum + day.minutes, 0);
