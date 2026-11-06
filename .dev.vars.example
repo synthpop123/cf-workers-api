@@ -9,7 +9,11 @@ SWITCH_API_TOKEN=
 PCTL_SESSION_TOKEN=
 # AirTrail API key.
 AIRTRAIL_API_KEY=
-# Security token of the Ghostfolio bot user the stocks service signs in as.
+# Read-only personal access token for Wealthfolio's MCP endpoint
+# (Settings → AI agent access, read scopes only): the portfolio's money.
+# WEALTHFOLIO_URL itself is a plain var in wrangler.jsonc.
+WEALTHFOLIO_TOKEN=
+# Security token of the Ghostfolio bot user the portfolio service signs in as.
 GHOSTFOLIO_TOKEN=
-# logo.dev publishable key, for the stocks logos.
+# logo.dev publishable key, for the portfolio logos.
 LOGO_DEV_TOKEN=
