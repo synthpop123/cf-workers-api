@@ -24,8 +24,13 @@ import { flights, movies, music, portfolio, switchPlay } from "./services";
 /** The sections, keyed in the bundle by service name. */
 const SECTIONS = [flights, movies, music, portfolio, switchPlay];
 
-export async function handleMisc(request: Request, env: Env): Promise<Response> {
-  const stored = await Promise.all(SECTIONS.map(({ site }) => load(env, site)));
+export async function handleMisc(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  const defer = (work: Promise<unknown>) => ctx.waitUntil(work);
+  const stored = await Promise.all(SECTIONS.map(({ site }) => load(env, site, defer)));
   const text = `{${SECTIONS.map(({ name }, i) => `"${name}":${stored[i]?.text ?? "null"}`).join(",")}}`;
   const etag = await etagOf(stored.map((entry) => entry?.meta.etag ?? "-").join(","));
   const changedAt = Math.max(0, ...stored.map((entry) => entry?.meta.changedAt ?? 0));

@@ -200,6 +200,10 @@ describe("GET /switch/site", () => {
     expect(changed.status).toBe(200);
     const changedTag = changed.headers.get("ETag")!;
     vi.setSystemTime(new Date("2026-09-07T05:00:00Z"));
+    // The first read of a new day is answered with the stored copy and
+    // recomposes behind the response (`call` waits that out); the next
+    // one gets the new day.
+    expect((await read(changedTag)).status).toBe(304);
     const nextDay = await read(changedTag);
     expect(nextDay.status).toBe(200);
     expect((await nextDay.json<{ today: string }>()).today).toBe("2026-09-07");

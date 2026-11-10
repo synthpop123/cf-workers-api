@@ -85,6 +85,38 @@ describe("snapshots", () => {
     expect(logged).toHaveBeenCalled();
   });
 
+  it("serves an earlier day's copy at once when the recompose can wait", async () => {
+    const { snapshot, state } = fake("a");
+    await refresh(env, snapshot);
+    vi.setSystemTime(new Date("2026-09-06T16:30:00Z")); // 00:30 next day in Shanghai
+    const deferred: Promise<unknown>[] = [];
+    const defer = (work: Promise<unknown>) => void deferred.push(work);
+    const served = await load(env, snapshot, defer);
+    expect(JSON.parse(served!.text).today).toBe("2026-09-06");
+    expect(deferred).toHaveLength(1);
+    await Promise.all(deferred);
+    expect((await meta("test:site"))?.day).toBe("2026-09-07");
+    expect(state.composed).toBe(2);
+  });
+
+  it("starts one background recompose a minute while the upstream is down", async () => {
+    const logged = captureErrors();
+    const { snapshot, state } = fake("a");
+    await refresh(env, snapshot);
+    vi.setSystemTime(new Date("2026-09-08T05:00:00Z"));
+    state.fail = true;
+    const deferred: Promise<unknown>[] = [];
+    const defer = (work: Promise<unknown>) => void deferred.push(work);
+    await load(env, snapshot, defer);
+    await load(env, snapshot, defer);
+    expect(deferred).toHaveLength(1);
+    vi.setSystemTime(new Date("2026-09-08T05:01:01Z"));
+    await load(env, snapshot, defer);
+    expect(deferred).toHaveLength(2);
+    await Promise.all(deferred);
+    expect(logged).toHaveBeenCalled();
+  });
+
   it("never serves a copy of another schema version", async () => {
     const logged = captureErrors();
     const { snapshot, state } = fake("a");
