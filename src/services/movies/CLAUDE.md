@@ -1,0 +1,1 @@
+../flights/AGENTS.md
