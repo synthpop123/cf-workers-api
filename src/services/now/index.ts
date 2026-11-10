@@ -18,7 +18,7 @@
 
 import { shiftDays } from "../../lib/http";
 import type { Service } from "../../lib/service";
-import { read, type Snapshot } from "../../lib/snapshot";
+import { read, type Snapshot, type Stored } from "../../lib/snapshot";
 import type { Site as MoviesSite, SiteFilm } from "../movies/compose";
 import { moviesSite } from "../movies";
 import type { Site as MusicSite, SiteListen } from "../music/compose";
@@ -27,7 +27,7 @@ import type { Site as PortfolioSite } from "../portfolio/compose";
 import { portfolioSite } from "../portfolio";
 import { tokensSite } from "../tokens/site";
 
-export const SITE_VERSION = 5;
+export const SITE_VERSION = 6;
 
 /** Days of token totals the tile's bars draw, today last. */
 export const TOKENS_DAYS = 14;
@@ -42,6 +42,9 @@ export interface TokensToday {
   /** Token totals of the last TOKENS_DAYS days, oldest first, the last
    *  one today's (`tokens`); a day with nothing reported is 0. */
   recent: number[];
+  /** Tokens and cost over the seven days ending today: the tile's
+   *  figure, which a quiet morning does not empty. */
+  week: { tokens: number; cost: number };
   /** The model with the most tokens over the seven days ending today
    *  and its share of them, in (0, 1]; null when the week has none. The
    *  page names the id. */
@@ -70,7 +73,7 @@ export interface Site {
   portfolio: Portfolio | null;
 }
 
-interface TokensSite {
+export interface TokensSite {
   daily: {
     date: string;
     tokens: number;
@@ -120,13 +123,6 @@ export function topModel(site: TokensSite, today: string): TokensToday["top"] {
   return best && total > 0 ? { model: best.model, share: Math.min(1, best.tokens / total) } : null;
 }
 
-/** What is stored, of any day: composing a source from here would put
- *  its upstream on this service's clock. */
-async function stored<T>(env: Env, snapshot: Snapshot): Promise<T | null> {
-  const entry = await read(env, snapshot);
-  return entry ? (JSON.parse(entry.text) as T) : null;
-}
-
 /** Each entry rebuilt field by field, so nothing else in the source
  *  payload rides along into this one. */
 export function pickListen(site: MusicSite | null): SiteListen | null {
@@ -153,11 +149,17 @@ export function pickTokens(site: TokensSite | null, today: string): TokensToday 
     { length: TOKENS_DAYS },
     (_, i) => byDate.get(shiftDays(today, i + 1 - TOKENS_DAYS))?.tokens ?? 0
   );
+  const week = { tokens: 0, cost: 0 };
+  for (let i = 0; i < WEEK_DAYS; i++) {
+    const entry = byDate.get(shiftDays(today, -i));
+    week.tokens += entry?.tokens ?? 0;
+    week.cost += entry?.cost ?? 0;
+  }
   const day = byDate.get(today);
   const top = topModel(site, today);
   return day
-    ? { tokens: day.tokens, cost: day.cost, messages: day.messages, recent, top }
-    : { tokens: 0, cost: 0, messages: 0, recent, top };
+    ? { tokens: day.tokens, cost: day.cost, messages: day.messages, recent, week, top }
+    : { tokens: 0, cost: 0, messages: 0, recent, week, top };
 }
 
 /** The same day `months` calendar months away, clamped to that month's
@@ -200,25 +202,38 @@ export function pickPortfolio(site: PortfolioSite | null): Portfolio | null {
   return { days: days.slice(start), value, invested, benchmark };
 }
 
+/** The last body composed in this isolate and what it was composed
+ *  from: the day and the sources' ETags. */
+let composed: { from: string; text: string } | null = null;
+
+const parsed = <T>(entry: Stored | null): T | null =>
+  entry ? (JSON.parse(entry.text) as T) : null;
+
 export const nowSite: Snapshot = {
   key: "now:site",
   version: SITE_VERSION,
   compose: async (env, today) => {
-    const [music, movies, tokens, portfolio] = await Promise.all([
-      stored<MusicSite>(env, musicSite),
-      stored<MoviesSite>(env, moviesSite),
-      stored<TokensSite>(env, tokensSite),
-      stored<PortfolioSite>(env, portfolioSite),
-    ]);
+    // What is stored, of any day: composing a source from here would put
+    // its upstream on this service's clock.
+    const sources = await Promise.all(
+      [musicSite, moviesSite, tokensSite, portfolioSite].map((source) => read(env, source))
+    );
+    // The heartbeat runs this every five minutes and the sources mostly
+    // have not moved: the same day over the same ETags is the same body,
+    // without parsing four payloads to find that out.
+    const from = [today, ...sources.map((entry) => entry?.meta.etag ?? "-")].join("|");
+    if (composed?.from === from) return composed.text;
+    const [music, movies, tokens, portfolio] = sources;
     const site: Site = {
       schemaVersion: SITE_VERSION,
       today,
-      listen: pickListen(music),
-      film: pickFilm(movies),
-      tokens: pickTokens(tokens, today),
-      portfolio: pickPortfolio(portfolio),
+      listen: pickListen(parsed<MusicSite>(music)),
+      film: pickFilm(parsed<MoviesSite>(movies)),
+      tokens: pickTokens(parsed<TokensSite>(tokens), today),
+      portfolio: pickPortfolio(parsed<PortfolioSite>(portfolio)),
     };
-    return JSON.stringify(site);
+    composed = { from, text: JSON.stringify(site) };
+    return composed.text;
   },
 };
 

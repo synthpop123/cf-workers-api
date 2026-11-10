@@ -118,6 +118,7 @@ describe("pickTokens", () => {
       cost: 0.5,
       messages: 2,
       recent: [...zeros(TOKENS_DAYS - 1), 3],
+      week: { tokens: 3, cost: 0.5 },
       top: null,
     });
     expect(pickTokens(site, "2026-09-28")).toEqual({
@@ -125,6 +126,7 @@ describe("pickTokens", () => {
       cost: 0,
       messages: 0,
       recent: [...zeros(TOKENS_DAYS - 2), 3, 0],
+      week: { tokens: 3, cost: 0.5 },
       top: null,
     });
     expect(pickTokens(null, "2026-09-28")).toBeNull();
@@ -258,6 +260,7 @@ describe("GET /now/site", () => {
         cost: 14.48,
         messages: 155,
         recent: [...zeros(TOKENS_DAYS - 1), 40_000_000],
+        week: { tokens: 40_000_000, cost: 14.48 },
         top: { model: "claude-opus-5-5", share: 0.95 },
       },
       portfolio: PORTFOLIO_TILE,
