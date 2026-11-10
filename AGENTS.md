@@ -136,10 +136,19 @@ production.
 - All dates are calendar days in `Asia/Shanghai` (`TIME_ZONE` in
   `lib/http.ts`), the zone the collectors run in and lkwplus.com buckets
   by. Every view is composed as of today in that zone.
-- `/` is `public/index.html` (Workers Static Assets, matched before the
-  router), one hand-written file reusing the lkwplus.com design tokens,
-  with a live strip from `/tokens/site` and `/misc`. When routes or
-  semantics change, update it with the README.
+- `/` redirects to the service page, `lkwplus.com/api`
+  (`src/pages/api.astro` in the homepage repo), drawn in the site's own
+  design system. When routes or semantics change, update it with the
+  README.
+- A read that finds a copy of an earlier day serves it and recomposes
+  behind the response (`load`'s `defer`, at most once a minute per
+  isolate); only a missing or other-version copy composes inline.
+- `/health` (`src/health.ts`) is 503 when a scheduled view's stored day
+  is not today past its first run (`DUE_BY`); a new scheduled service
+  adds its entry there.
+- `contract/versions.json` lists every view's `SITE_VERSION`
+  (`test/contract.spec.ts` holds it to the code); the homepage's CI
+  reads it, so a bump lands here first.
 
 ## tokens
 

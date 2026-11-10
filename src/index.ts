@@ -9,32 +9,38 @@
  *   /music/*     Koito listening history                        (KV)
  *   /movies/*    the Letterboxd diary                      (KV + R2)
  *   /memos/*     Mastodon statuses, photos mirrored        (KV + R2)
+ *   /portfolio/* Wealthfolio and Ghostfolio, as returns     (KV + R2)
  *   /now/*       the home page's Now tiles, from the stored
- *                music, movies, tokens and flights views        (KV)
- *   /misc        the four /misc snapshots in one response
- *   /health      liveness
+ *                music, movies, tokens and portfolio views      (KV)
+ *   /misc        the five /misc snapshots in one response
+ *   /health      liveness, and whether each view is as fresh as its
+ *                schedule promises
  *
  * Each service lives in src/services/<name>/ and default-exports a
  * `Service` (lib/service.ts): its name, which is also its path prefix, its
  * public view and its other routes. Everything they share — the router,
  * the snapshot store every view is served from, the image mirror, the HTTP
  * vocabulary and the upstream narrowing primitives — is in src/lib/, and
- * what runs on a schedule is in schedule.ts. `/` is the service page
- * (public/index.html), served by Workers Static Assets before this router
- * runs.
+ * what runs on a schedule is in schedule.ts. `/` redirects to the service
+ * page, lkwplus.com/api, which lives with the site so it is drawn in the
+ * site's design system rather than a copy of it.
  */
 
-import { json } from "./lib/http";
+import { handleHealth } from "./health";
 import { createRouter } from "./lib/router";
 import { serviceRoutes } from "./lib/service";
 import { handleMisc } from "./misc";
 import { runScheduled } from "./schedule";
 import { SERVICES } from "./services";
 
+/** Where this Worker is documented: a page of the site it serves. */
+const SERVICE_PAGE = "https://lkwplus.com/api";
+
 const router = createRouter([
   ...SERVICES.flatMap(serviceRoutes),
   ["GET /misc", handleMisc],
-  ["GET /health", () => json({ ok: true, services: SERVICES.map(({ name }) => name) })],
+  ["GET /health", handleHealth],
+  ["GET /", () => new Response(null, { status: 302, headers: { Location: SERVICE_PAGE } })],
 ]);
 
 export default {

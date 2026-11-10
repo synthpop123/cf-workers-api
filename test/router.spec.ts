@@ -5,7 +5,6 @@ import { call, captureErrors } from "./helpers";
 
 describe("routing", () => {
   it.each([
-    ["/health", "GET", 200],
     ["/switch/sync", "POST", 401],
     ["/switch/sync", "GET", 405],
     ["/tokens/api/submit", "POST", 401],
@@ -25,7 +24,6 @@ describe("routing", () => {
 
   it("answers HEAD for a GET route with the headers and no body", async () => {
     const response = await call("/health", { method: "HEAD" });
-    expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("application/json");
     expect(await response.text()).toBe("");
   });
@@ -37,10 +35,15 @@ describe("routing", () => {
   });
 
   it("lists the services on /health", async () => {
-    expect(await (await call("/health")).json()).toEqual({
-      ok: true,
+    expect(await (await call("/health")).json()).toMatchObject({
       services: ["tokens", "switch", "flights", "music", "movies", "memos", "portfolio", "now"],
     });
+  });
+
+  it("sends / to the service page", async () => {
+    const response = await call("/");
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("https://lkwplus.com/api");
   });
 
   it("answers a thrown handler with JSON and CORS, not the runtime's bare 500", async () => {

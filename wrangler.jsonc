@@ -62,10 +62,6 @@
     ]
   },
 
-  // The service page. Assets match before the Worker runs, so "/" serves
-  // public/index.html and every API path falls through to the router.
-  "assets": { "directory": "./public" },
-
   // Every public snapshot (lib/snapshot.ts) plus the tokens quota plans,
   // under keys namespaced by service: `tokens:site`, `flights:site`, …
   "kv_namespaces": [{ "binding": "CACHE", "id": "57ae0982f2914c6eb64c38b5e54e0613" }],
