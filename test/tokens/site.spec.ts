@@ -365,6 +365,32 @@ describe("GET /tokens/site", () => {
     });
   });
 
+  it("publishes MCP server names only on opt-in, and clears them without it", async () => {
+    const mcp = async () => {
+      const site = (await (await call("/tokens/site")).json()) as Record<string, any>;
+      return site.devices[0].mcpServers;
+    };
+    await submit();
+    expect(await mcp()).toEqual(["context7"]);
+
+    // A CLI from before the opt-in sends the names and no flag: dropped,
+    // and the stored list goes with them.
+    const legacy = submissionPayload();
+    legacy.mcpServersOptIn = undefined;
+    await submit(legacy);
+    expect(await mcp()).toBeNull();
+
+    await submit();
+    expect(await mcp()).toEqual(["context7"]);
+
+    // Opted out: the new CLI sends neither.
+    const optedOut = submissionPayload();
+    optedOut.mcpServers = undefined;
+    optedOut.mcpServersOptIn = undefined;
+    await submit(optedOut);
+    expect(await mcp()).toBeNull();
+  });
+
   it("splits clients and providers across the models behind them, biggest first", async () => {
     // The questions the marginals cannot answer: a coding agent running a
     // model from another vendor (byClient says "claude: 500", byModel says

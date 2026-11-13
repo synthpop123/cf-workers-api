@@ -94,6 +94,7 @@ export function submissionPayload(): SubmissionPayload {
       sessionCount: 5,
     },
     mcpServers: ["context7"],
+    mcpServersOptIn: true,
   };
 }
 

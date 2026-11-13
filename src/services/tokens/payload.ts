@@ -87,6 +87,7 @@ export interface SubmissionPayload {
     sessionCount?: number;
   };
   mcpServers?: string[];
+  mcpServersOptIn?: boolean;
   clientManifest?: { schemaVersion?: number; clients?: ManifestEntry[] };
 }
 

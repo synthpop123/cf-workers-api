@@ -327,9 +327,14 @@ function planStatements(
 
   // Device row with envelope metadata.
   const tm = payload.timeMetrics;
-  const mcpServers = Array.isArray(payload.mcpServers)
-    ? payload.mcpServers.filter((s): s is string => typeof s === "string" && s.length > 0)
-    : null;
+  // MCP server names are public on /tokens/site, so they are kept only when
+  // the CLI says the user opted in (`tokens mcp-names enable`, CLI >= 27.2.1).
+  // The list is replaced outright: a submit without the opt-in, which is
+  // every older CLI, clears what an earlier one stored (missuo/tokens#121).
+  const mcpServers =
+    payload.mcpServersOptIn === true && Array.isArray(payload.mcpServers)
+      ? payload.mcpServers.filter((s): s is string => typeof s === "string" && s.length > 0)
+      : null;
   statements.push(
     env.TOKENS_DB.prepare(
       `INSERT INTO devices
@@ -344,7 +349,7 @@ function planStatements(
            longest_continuous_ms = coalesce(excluded.longest_continuous_ms, longest_continuous_ms),
            max_concurrent_sessions = coalesce(excluded.max_concurrent_sessions, max_concurrent_sessions),
            session_count = coalesce(excluded.session_count, session_count),
-           mcp_servers = coalesce(excluded.mcp_servers, mcp_servers)`
+           mcp_servers = excluded.mcp_servers`
     ).bind(
       deviceId,
       deviceName,
