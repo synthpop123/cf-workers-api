@@ -20,11 +20,12 @@ flowchart LR
     Letterboxd["Letterboxd RSS"]
     Wealthfolio["Wealthfolio (MCP)"]
     Ghostfolio["Ghostfolio"]
+    Beszel["Beszel hub"]
   end
   subgraph worker[cf-workers-api]
     Router["router"]
     Scheduler["scheduler<br/>(2 cron triggers)"]
-    Services["services/<br/>tokens · switch · flights · music · movies · memos · portfolio · now"]
+    Services["services/<br/>tokens · switch · flights · music · movies · memos · portfolio · now · homelab"]
   end
   CLI & Collectors -->|POST /tokens/…| Router
   Scheduler --> Services
@@ -32,7 +33,7 @@ flowchart LR
   Services -->|history| D1[("D1<br/>tokens-usage · switch-play")]
   Services -->|snapshots| KV[("KV<br/>CACHE")]
   Services -->|artwork, backups| R2[("R2")]
-  Nintendo & AirTrail & Koito & Letterboxd & Wealthfolio & Ghostfolio --> Services
+  Nintendo & AirTrail & Koito & Letterboxd & Wealthfolio & Ghostfolio & Beszel --> Services
   KV -->|"GET /&lt;service&gt;/site · /misc"| Site["lkwplus.com"]
 ```
 
@@ -48,6 +49,7 @@ flowchart LR
 | [`memos`](src/services/memos) | self-hosted Mastodon | R2 `imagebed` (photos) | every 5 minutes |
 | [`portfolio`](src/services/portfolio) | self-hosted [Wealthfolio](https://github.com/wealthfolio/wealthfolio) (MCP, the money) and [Ghostfolio](https://github.com/ghostfolio/ghostfolio) (the securities); logo.dev | R2 `imagebed` (logos) | hourly, at five past |
 | [`now`](src/services/now) | the stored music, movies, tokens and portfolio views | — | every 5 minutes, right after music |
+| [`homelab`](src/services/homelab) | self-hosted [Beszel](https://github.com/henrygd/beszel) hub (a read-only user) | — | polled every 5 minutes; stored when health moves, else every 30 minutes |
 
 - **tokens** implements the official server's submission contract and merge semantics for the `tokens` CLI — per-device, per-day, per-client replace with a regression guard, parser-revision floors, authoritative coverage windows, the official consistency checks — and keeps the full usage matrix (device × date × client × model × provider, every token category, messages, cost). Its view is the dashboard at [lkwplus.com/tokens](https://lkwplus.com/tokens), including subscription quota cards reported by a collector that keeps the vendor credentials on its own machine.
 - **switch** syncs daily play time from Nintendo's Parental Controls API, looks each title up once on the eShop (HK for the price, US for a consistent name) and mirrors cover art into R2.
@@ -57,6 +59,7 @@ flowchart LR
 - **memos** reads the latest public Mastodon statuses and copies their photos into R2 as WebP at 640 and 1600 wide.
 - **portfolio** reads the money from Wealthfolio (its MCP endpoint, a read-only token) and the securities from Ghostfolio (profiles and closes, through a read-only grant), and ships returns, never amounts: per account its value and the money put in as ratios on one scale (so the page can say what the money did over any range), each holding's weight, and the public daily closes of the holdings and of an S&P 500 fund. Company logos are mirrored into R2 from logo.dev.
 - **now** is the home page's Now section: the latest listen and film, today's tokens with the last two weeks, and the portfolio's last three months against the S&P 500, read from the other services' stored views rather than their upstreams.
+- **homelab** reads the two self-hosted hosts from Beszel — status, CPU, memory, disk, load, uptime, hardware — and every running container with its Docker health. A container's health shows within five minutes; the metrics, which move every minute, are rewritten at most every half hour so they do not spend the KV write budget, and each host carries `seenAt`.
 
 ## API
 
@@ -72,6 +75,7 @@ Reads are public and open to any origin. Every view answers `Cache-Control: no-c
 | `GET /memos/site` | the latest memos, attachments resolved to what renders |
 | `GET /portfolio/site` | growth index and holdings by weight per account, daily closes of the holdings and the benchmark |
 | `GET /now/site` | `{listen, film, tokens, portfolio}`: the latest listen and film, today's token totals with 14 days of bars, the week's totals and its top model, the portfolio's 3M index and benchmark |
+| `GET /homelab/site` | `{hosts: [{name, status, seenAt, cpu, memory, disk, load, bootedAt, cores, memoryBytes, arch, os, health: {healthy, starting, unhealthy, none}, containers: [{name, health}]}]}` |
 | `GET /misc` | `{"flights":…,"movies":…,"music":…,"portfolio":…,"switch":…}` — each exactly that service's view, or `null` if it has nothing to serve |
 | `GET /health` | `{"ok", "services", "views"}`: each view's stored day and last change, and `503` when a scheduled one is overdue |
 
@@ -111,7 +115,7 @@ The account-wide cron allowance is small (five triggers on the free plan), so th
 
 | Trigger | Jobs |
 |---|---|
-| `*/5 * * * *` | music then now, and memos, every 5 min · movies every 3 h · flights hourly · portfolio hourly at :05 |
+| `*/5 * * * *` | music then now, and memos, every 5 min · movies every 3 h · flights hourly · portfolio hourly at :05 · homelab every 5 min |
 | `0 1 * * *` | the Switch sync |
 
 Each trigger is its own invocation with its own CPU and subrequest budget, which is why the Switch sync — the one heavy job — has a trigger to itself. A test checks that the triggers match `wrangler.jsonc` and that every cadence lands on a tick.

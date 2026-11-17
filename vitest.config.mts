@@ -20,6 +20,8 @@ const TEST_SECRETS = {
   WEALTHFOLIO_TOKEN: "test-wealthfolio-token",
   GHOSTFOLIO_TOKEN: "test-ghostfolio-token",
   LOGO_DEV_TOKEN: "test-logo-token",
+  BESZEL_EMAIL: "monitor@example.test",
+  BESZEL_PASSWORD: "test-beszel-password",
 };
 Object.assign(process.env, TEST_SECRETS);
 // Wrangler then announces where it found them, at info level, once per

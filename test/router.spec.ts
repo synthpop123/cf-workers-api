@@ -36,7 +36,17 @@ describe("routing", () => {
 
   it("lists the services on /health", async () => {
     expect(await (await call("/health")).json()).toMatchObject({
-      services: ["tokens", "switch", "flights", "music", "movies", "memos", "portfolio", "now"],
+      services: [
+        "tokens",
+        "switch",
+        "flights",
+        "music",
+        "movies",
+        "memos",
+        "portfolio",
+        "now",
+        "homelab",
+      ],
     });
   });
 

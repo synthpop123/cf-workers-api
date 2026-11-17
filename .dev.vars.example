@@ -17,3 +17,7 @@ WEALTHFOLIO_TOKEN=
 GHOSTFOLIO_TOKEN=
 # logo.dev publishable key, for the portfolio logos.
 LOGO_DEV_TOKEN=
+# Sign-in of the read-only Beszel user the homelab service reads as
+# (BESZEL_URL itself is a plain var in wrangler.jsonc).
+BESZEL_EMAIL=
+BESZEL_PASSWORD=

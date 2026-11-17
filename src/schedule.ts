@@ -24,6 +24,9 @@
  *                             flights and movies spend the trigger's
  *                             subrequests; a session's moves show within
  *                             the hour, and the day rolls at 00:05
+ *                   homelab   every 5 min, three Beszel calls; stored
+ *                             only when health moved or the metrics
+ *                             are half an hour old (services/homelab)
  *   `0 1 * * *`     the Switch sync (09:00 Asia/Shanghai, after Nintendo's
  *                   overnight recalculation) — on a trigger of its own
  *                   because each trigger is its own invocation, with its
@@ -42,6 +45,7 @@
 import { TIME_ZONE } from "./lib/http";
 import { refresh, type Snapshot } from "./lib/snapshot";
 import { flights, memos, movies, music, now, portfolio } from "./services";
+import { refreshHomelab } from "./services/homelab";
 import { runSync } from "./services/switch";
 
 /** Minutes between runs, counted from midnight plus `offset`; or a daily
@@ -80,6 +84,7 @@ export const TRIGGERS = new Map<string, Job[]>([
       refreshing(movies.site, { every: 180 }),
       refreshing(flights.site, { every: 60 }),
       refreshing(portfolio.site, { every: 60, offset: 5 }),
+      { name: "refresh homelab:site", cadence: { every: 5 }, run: (env) => refreshHomelab(env) },
     ],
   ],
   ["0 1 * * *", [{ name: "switch sync", run: runSync }]],

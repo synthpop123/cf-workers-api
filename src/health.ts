@@ -30,6 +30,7 @@ export const DUE_BY: Readonly<Record<string, number>> = {
   memos: 30,
   portfolio: 30,
   now: 30,
+  homelab: 30,
 };
 
 interface ViewHealth {

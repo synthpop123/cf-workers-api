@@ -57,25 +57,43 @@ describe("runScheduled", () => {
     const logged = captureErrors();
     const hosts = upstreams();
     await runScheduled("*/5 * * * *", local("10:10"), env);
-    expect(new Set(hosts)).toEqual(new Set(["music.lkwplus.com", "mastodon.lkwplus.com"]));
+    expect(new Set(hosts)).toEqual(
+      new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "beszel.lkwplus.com"])
+    );
 
     hosts.length = 0;
     await runScheduled("*/5 * * * *", local("10:05"), env);
     // The portfolio job opens its ledger first, and the stub fails it there.
     expect(new Set(hosts)).toEqual(
-      new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "wealthfolio.lkwplus.com"])
+      new Set([
+        "music.lkwplus.com",
+        "mastodon.lkwplus.com",
+        "beszel.lkwplus.com",
+        "wealthfolio.lkwplus.com",
+      ])
     );
 
     hosts.length = 0;
     await runScheduled("*/5 * * * *", local("10:00"), env);
     expect(new Set(hosts)).toEqual(
-      new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "flight.lkwplus.com"])
+      new Set([
+        "music.lkwplus.com",
+        "mastodon.lkwplus.com",
+        "beszel.lkwplus.com",
+        "flight.lkwplus.com",
+      ])
     );
 
     hosts.length = 0;
     await runScheduled("*/5 * * * *", local("00:00"), env);
     expect(new Set(hosts)).toEqual(
-      new Set(["music.lkwplus.com", "mastodon.lkwplus.com", "letterboxd.com", "flight.lkwplus.com"])
+      new Set([
+        "music.lkwplus.com",
+        "mastodon.lkwplus.com",
+        "beszel.lkwplus.com",
+        "letterboxd.com",
+        "flight.lkwplus.com",
+      ])
     );
     expect(logged).toHaveBeenCalled();
   });

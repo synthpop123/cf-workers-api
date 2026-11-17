@@ -29,7 +29,7 @@ production.
 
 ## Shape of the Worker
 
-- One Worker, eight services. Each `src/services/<name>/` default-exports
+- One Worker, nine services. Each `src/services/<name>/` default-exports
   a `Service` (`lib/service.ts`): its name — also its path prefix and KV
   namespace — its snapshot, and any other routes. `src/services/index.ts`
   is the registry; `src/index.ts` derives `GET /<name>/site` for each and
@@ -152,4 +152,4 @@ production.
 
 ## Per-service notes
 
-Each service's own notes sit beside its code, in `src/services/<name>/AGENTS.md` (with a `CLAUDE.md` symlink), and load when that directory is read: `tokens`, `switch`, `portfolio`, `memos`, `now`, and one text shared by `flights`, `music` and `movies`. Read a service's notes before changing it.
+Each service's own notes sit beside its code, in `src/services/<name>/AGENTS.md` (with a `CLAUDE.md` symlink), and load when that directory is read: `tokens`, `switch`, `portfolio`, `memos`, `now`, `homelab`, and one text shared by `flights`, `music` and `movies`. Read a service's notes before changing it.

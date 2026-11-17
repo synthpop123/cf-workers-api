@@ -34,6 +34,7 @@
     // Impersonation-Id).
     "WEALTHFOLIO_URL": "https://wealthfolio.lkwplus.com",
     "GHOSTFOLIO_URL": "https://ghostfolio.lkwplus.com",
+    "BESZEL_URL": "https://beszel.lkwplus.com",
     "GHOSTFOLIO_ACCESS_ID": "245c4b96-e08b-41f7-9217-28703aaf5fe2"
   },
 
@@ -58,7 +59,9 @@
       // signs in as for its securities.
       "GHOSTFOLIO_TOKEN",
       // logo.dev publishable key, for the portfolio logos the Worker mirrors.
-      "LOGO_DEV_TOKEN"
+      "LOGO_DEV_TOKEN",
+      "BESZEL_EMAIL",
+      "BESZEL_PASSWORD"
     ]
   },
 
